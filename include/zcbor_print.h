@@ -15,6 +15,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include "zcbor_common.h"
 
 #ifndef ZCBOR_PRINT_FUNC
 #include <stdio.h>
@@ -80,6 +81,26 @@ void zcbor_print_compare_strings_diff(const uint8_t *str1, const uint8_t *str2, 
 const char *zcbor_error_str(int error);
 
 void zcbor_print_error(int error);
+
+void zcbor_print_indent(size_t indent_len);
+
+void zcbor_print_newline(void);
+
+void zcbor_print_str(const uint8_t *str, size_t len, size_t indent_len);
+
+void zcbor_print_bstr(zcbor_state_t *state, size_t len, size_t indent_len);
+
+bool zcbor_print_float(int8_t additional, uint64_t value);
+
+void zcbor_print_numeric(uint8_t header_byte, uint64_t value);
+
+void zcbor_print_tstr(zcbor_state_t *state, size_t len, size_t indent_len);
+
+void zcbor_print_tag(uint32_t tag, size_t indent_len);
+
+void zcbor_print_end(zcbor_major_type_t major_type, size_t indent_len);
+
+void zcbor_print_cbor(struct zcbor_element *elem);
 
 #ifdef __cplusplus
 }

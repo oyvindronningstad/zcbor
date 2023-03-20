@@ -354,6 +354,8 @@ void zcbor_new_state(zcbor_state_t *state_array, size_t n_states,
 		const uint8_t *payload, size_t payload_len, size_t elem_count,
 		uint8_t *elem_state, size_t elem_state_bytes);
 
+void zcbor_new_state_from_string(zcbor_state_t *state_array, size_t n_states, struct zcbor_string *str);
+
 /** Do boilerplate entry function procedure.
  *  Initialize states, call function, and check the result.
  */

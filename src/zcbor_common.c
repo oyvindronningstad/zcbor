@@ -172,6 +172,11 @@ void zcbor_new_state(zcbor_state_t *state_array, size_t n_states,
 	}
 }
 
+void zcbor_new_state_from_string(zcbor_state_t *state_array, size_t n_states, struct zcbor_string *str)
+{
+	zcbor_new_state(state_array, n_states, str->value, str->len, 1, 0, 0);
+}
+
 void zcbor_update_state(zcbor_state_t *state,
 		const uint8_t *payload, size_t payload_len)
 {
