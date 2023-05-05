@@ -116,6 +116,8 @@ struct {
 	bool counting_map_elems; /**< Is set to true while the number of elements of the
 	                              current map are being counted. */
 #ifdef ZCBOR_MAP_SMART_SEARCH
+	bool elem_state_backed_up; /**< Is set to true if the map elements have been backed up.
+	                                This flag is used internally by the backup process. */
 	uint8_t *map_search_elem_state; /**< Optional flags to use when searching unordered
 	                                     maps. If this is not NULL and map_elem_count
 	                                     is non-zero, this consists of one flag per element
@@ -129,6 +131,7 @@ struct {
 	size_t map_elems_processed; /**< The number of elements of an unordered map
 	                                 that have been processed. */
 #endif
+	size_t map_start_backup_num;
 	size_t map_elem_count; /**< Number of elements in the current unordered map.
 	                            This also serves as the number of bits (not bytes)
 	                            in the map_search_elem_state array (when applicable). */
@@ -285,6 +288,8 @@ do { \
 #define ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE 20
 #define ZCBOR_ERR_INVALID_VALUE_ENCODING 21 ///! When ZCBOR_CANONICAL is defined, and the incoming data is not encoded with minimal length, or uses indefinite length array.
 #define ZCBOR_ERR_CONSTANT_STATE_MISSING 22
+#define ZCBOR_ERR_NO_FLAG_MEM 23
+#define ZCBOR_ERR_UNSUPPORTED 24
 #define ZCBOR_ERR_UNKNOWN 31
 
 /** The largest possible elem_count. */
@@ -296,12 +301,15 @@ do { \
 
 /** Take a backup of the current state. Overwrite the current elem_count. */
 bool zcbor_new_backup(zcbor_state_t *state, size_t new_elem_count);
+bool zcbor_new_backup_w_elem_state(zcbor_state_t *state, size_t new_elem_count, bool backup_elem_state);
 
 /** Consult the most recent backup. In doing so, check whether elem_count is
  *  less than or equal to max_elem_count.
  *  Also, take action based on the flags (See ZCBOR_FLAG_*).
  */
 bool zcbor_process_backup(zcbor_state_t *state, uint32_t flags, size_t max_elem_count);
+bool zcbor_process_backup_num(zcbor_state_t *state, uint32_t flags,
+	size_t max_elem_count, size_t backup_num);
 
 /** Convenience function for starting encoding/decoding of a union.
  *
@@ -339,10 +347,21 @@ void zcbor_new_state(zcbor_state_t *state_array, size_t n_states,
 
 /** Do boilerplate entry function procedure.
  *  Initialize states, call function, and check the result.
+ *  This sets `manually_process_elem` to true.
  */
 int zcbor_entry_function(const uint8_t *payload, size_t payload_len,
 	void *result, size_t *payload_len_out, zcbor_state_t *state, zcbor_decoder_t func,
 	size_t n_states, size_t elem_count);
+
+
+/** Do boilerplate entry function procedure.
+ *  Initialize states, call function, and check the result.
+ *  Allows for using one or more state structs for map elem_states.
+ *  This sets `manually_process_elem` to true.
+ */
+int zcbor_entry_function_with_elem_states(const uint8_t *payload, size_t payload_len,
+	void *result, size_t *payload_len_out, zcbor_state_t *state, zcbor_decoder_t func,
+	size_t n_states, size_t elem_count, size_t n_elem_states);
 
 #ifdef ZCBOR_STOP_ON_ERROR
 /** Check stored error and fail if present, but only if stop_on_error is true.
@@ -522,10 +541,15 @@ static inline size_t zcbor_flags_to_bytes(size_t num_flags)
 	(ZCBOR_ROUND_UP(num_flags, sizeof(zcbor_state_t) * ZCBOR_BITS_PER_BYTE) \
 			/ (sizeof(zcbor_state_t) * ZCBOR_BITS_PER_BYTE))
 
+#define ZCBOR_BYTES_TO_STATES(num_bytes) \
+	(ZCBOR_ROUND_UP(num_bytes, sizeof(zcbor_state_t)) / (sizeof(zcbor_state_t)))
+
+#define ZCBOR_BYTE_STATES(n_bytes) ZCBOR_BYTES_TO_STATES(n_bytes)
 #define ZCBOR_FLAG_STATES(n_flags) ZCBOR_FLAGS_TO_STATES(n_flags)
 
 #else
-#define ZCBOR_FLAG_STATES(n_flags) 0
+#define ZCBOR_BYTE_STATES(n_bytes) (n_bytes * 0)
+#define ZCBOR_FLAG_STATES(n_flags) (n_flags * 0)
 #endif
 
 size_t strnlen(const char *, size_t);
