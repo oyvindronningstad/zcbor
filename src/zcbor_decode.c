@@ -1417,37 +1417,32 @@ bool zcbor_float_pexpect(zcbor_state_t *state, double *expected)
 }
 
 
-bool zcbor_any_skip(zcbor_state_t *state, void *result)
+bool zcbor_any_decode(zcbor_state_t *state, struct zcbor_element *element)
 {
-	PRINT_FUNC();
-	zcbor_assert_state(result == NULL,
-			"'any' type cannot be returned, only skipped.\r\n");
-	(void)result;
-
-	INITIAL_CHECKS();
-	zcbor_major_type_t major_type = ZCBOR_MAJOR_TYPE(*state->payload);
-	uint8_t additional = ZCBOR_ADDITIONAL(*state->payload);
-	uint64_t value = 0; /* In case of indefinite_length_array. */
+	/* INITIAL_CHECKS(); done by zcbor_tag_decode() below. */
 	zcbor_state_t state_copy;
+	uint32_t tag_dummy;
+	struct zcbor_element elem = {0};
+	uint64_t value = 0;
+	size_t init_elem_count;
+	size_t list_map_count = 0;
+	bool indefinite_length_array = false;
+	int err;
 
 	memcpy(&state_copy, state, sizeof(zcbor_state_t));
 
-	while (major_type == ZCBOR_MAJOR_TYPE_TAG) {
-		uint32_t tag_dummy;
+	elem.encoded.value = state_copy.payload;
 
-		if (!zcbor_tag_decode(&state_copy, &tag_dummy)) {
-			ZCBOR_FAIL();
-		}
-		ZCBOR_ERR_IF(state_copy.payload >= state_copy.payload_end, ZCBOR_ERR_NO_PAYLOAD);
-		major_type = ZCBOR_MAJOR_TYPE(*state_copy.payload);
-		additional = ZCBOR_ADDITIONAL(*state_copy.payload);
-	}
+	while (zcbor_tag_decode(&state_copy, &tag_dummy));
 
-	bool indefinite_length_array = false;
-	bool *ila_ptr = &indefinite_length_array;
+	elem.encoded_value = state_copy.payload;
+	elem.type = ZCBOR_MAJOR_TYPE(*state_copy.payload);
+	elem.additional = ZCBOR_ADDITIONAL(*state_copy.payload);
 
 #ifdef ZCBOR_CANONICAL
-	ila_ptr = NULL;
+	bool *ila_ptr = NULL;
+#else
+	bool *ila_ptr = &indefinite_length_array;
 #endif
 
 	if (!value_extract(&state_copy, &value, sizeof(value), ila_ptr)) {
@@ -1455,8 +1450,12 @@ bool zcbor_any_skip(zcbor_state_t *state, void *result)
 		ZCBOR_FAIL();
 	}
 
-	switch (major_type) {
+	init_elem_count = (size_t)value;
+	elem.encoded_payload = state_copy.payload;
+
+	switch (elem.type) {
 		case ZCBOR_MAJOR_TYPE_BSTR:
+			/* fallthrough */
 		case ZCBOR_MAJOR_TYPE_TSTR:
 			/* 'value' is the length of the BSTR or TSTR. */
 			ZCBOR_FAIL_IF(!str_overflow_check(state, (size_t)value));
@@ -1464,34 +1463,83 @@ bool zcbor_any_skip(zcbor_state_t *state, void *result)
 			break;
 		case ZCBOR_MAJOR_TYPE_MAP:
 			ZCBOR_ERR_IF(value > (SIZE_MAX / 2), ZCBOR_ERR_INT_SIZE);
-			value *= 2;
+			init_elem_count *= 2;
 			/* fallthrough */
 		case ZCBOR_MAJOR_TYPE_LIST:
+			state_copy.elem_count = init_elem_count;
 			if (indefinite_length_array) {
-				value = ZCBOR_LARGE_ELEM_COUNT;
+				state_copy.elem_count = ZCBOR_LARGE_ELEM_COUNT;
 			}
-			state_copy.elem_count = (size_t)value;
 			state_copy.decode_state.indefinite_length_array = indefinite_length_array;
+
 			while (!zcbor_array_at_end(&state_copy)) {
-				if (!zcbor_any_skip(&state_copy, NULL)) {
+				if (!zcbor_any_decode(&state_copy, NULL)) {
 					ZCBOR_FAIL();
 				}
+				list_map_count++;
 			}
-#ifndef ZCBOR_CANONICAL
-			if (indefinite_length_array && !array_end_expect(&state_copy)) {
-				ZCBOR_FAIL();
+
+			if (indefinite_length_array) {
+				state_copy.payload++; /* payload bounds checked by zcbor_array_at_end(). */
 			}
-#endif
 			break;
 		default:
 			/* Do nothing */
 			break;
 	}
 
+	if (element) {
+		elem.encoded.len = (size_t)state_copy.payload - (size_t)elem.encoded.value;
+		elem.value = value;
+		elem.neg_value = (int64_t)value;
+
+		switch (elem.type) {
+			case ZCBOR_MAJOR_TYPE_NINT:
+				err = val_to_int(elem.type, &elem.neg_value, sizeof(elem.neg_value));
+				ZCBOR_ERR_IF(err != ZCBOR_SUCCESS, err);
+				break;
+			case ZCBOR_MAJOR_TYPE_MAP:
+				elem.list_map_count = list_map_count / 2;
+				break;
+			case ZCBOR_MAJOR_TYPE_LIST:
+				elem.list_map_count = list_map_count;
+				break;
+			case ZCBOR_MAJOR_TYPE_SIMPLE:
+				elem.special = elem.additional;
+				if (elem.special < ZCBOR_SPECIAL_VAL_FALSE) {
+					elem.special = ZCBOR_SPECIAL_VAL_SIMPLE;
+				} else if (elem.special <= ZCBOR_SPECIAL_VAL_TRUE) {
+					elem.bool_value = elem.special - ZCBOR_SPECIAL_VAL_FALSE;
+		#ifdef ZCBOR_BIG_ENDIAN
+				} else if (elem.special == ZCBOR_SPECIAL_VAL_FLOAT16) {
+					elem.float16 = (uint16_t)elem.value;
+				} else if (elem.special == ZCBOR_SPECIAL_VAL_FLOAT32) {
+					*(uint32_t *)&elem.float32 = (uint32_t)elem.value;
+		#endif
+				}
+				break;
+			default:
+				/* Do nothing */
+				break;
+		}
+		memcpy(element, &elem, sizeof(*element));
+	}
+
 	state->payload = state_copy.payload;
 	state->elem_count--;
 
 	return true;
+}
+
+
+bool zcbor_any_skip(zcbor_state_t *state, void *result)
+{
+	PRINT_FUNC();
+	zcbor_assert_state(result == NULL,
+			"'any' type cannot be returned, only skipped.\r\n");
+	(void)result;
+
+	return zcbor_any_decode(state, NULL);
 }
 
 

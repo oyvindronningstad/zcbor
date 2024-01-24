@@ -274,6 +274,8 @@ bool zcbor_array_at_end(zcbor_state_t *state);
  *                       @ref zcbor_decoder_t.
  */
 bool zcbor_any_skip(zcbor_state_t *state, void *unused);
+bool zcbor_any_decode(zcbor_state_t *state, struct zcbor_element *element);
+
 
 /** Decode 0 or more elements with the same type and constraints.
  *

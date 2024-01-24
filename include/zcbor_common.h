@@ -182,6 +182,8 @@ typedef enum
 /** Extract the additional info, i.e. the last 5 bits of the header byte. */
 #define ZCBOR_ADDITIONAL(header_byte) ((header_byte) & 0x1F)
 
+
+
 /** Convenience macro for failing out of a decoding/encoding function.
 */
 #define ZCBOR_FAIL() \
@@ -266,6 +268,7 @@ do { \
 #define ZCBOR_ERR_NOT_AT_END 19
 #define ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE 20
 #define ZCBOR_ERR_INVALID_VALUE_ENCODING 21 ///! When ZCBOR_CANONICAL is defined, and the incoming data is not encoded with minimal length.
+#define ZCBOR_ERR_MALFORMED_ELEM 22 ///! struct zcbor_element object is malformed.
 #define ZCBOR_ERR_UNKNOWN 31
 
 /** The largest possible elem_count. */
@@ -273,6 +276,39 @@ do { \
 
 /** Initial value for elem_count for when it just needs to be large. */
 #define ZCBOR_LARGE_ELEM_COUNT (ZCBOR_MAX_ELEM_COUNT - 15)
+
+enum zcbor_special_val {
+	ZCBOR_SPECIAL_VAL_FALSE = ZCBOR_BOOL_TO_SIMPLE,
+	ZCBOR_SPECIAL_VAL_TRUE,
+	ZCBOR_SPECIAL_VAL_NIL,
+	ZCBOR_SPECIAL_VAL_UNDEF,
+	ZCBOR_SPECIAL_VAL_SIMPLE, // Any unallocated simple value (0-19, 32-255).
+	ZCBOR_SPECIAL_VAL_FLOAT16,
+	ZCBOR_SPECIAL_VAL_FLOAT32,
+	ZCBOR_SPECIAL_VAL_FLOAT64,
+};
+
+/** Container for a single CBOR element, including its tags and contents.
+ *  For lists and maps, the child elements can be decoded from the encoded_payload. */
+struct zcbor_element {
+	zcbor_major_type_t type;
+	union {
+		uint8_t additional; // Used for major_type != MAJOR_TYPE_SIMPLE
+		enum zcbor_special_val special; // Used for MAJOR_TYPE_SIMPLE
+	};
+	uint64_t value; // Raw value. Is 0 whenever additional is ZCBOR_VALUE_IS_INDEFINITE_LENGTH.
+	union {
+		int64_t neg_value; // Used for NINT
+		uint64_t list_map_count; // Number of elements in a LIST or MAP
+		bool bool_value; // Used for bools
+		uint16_t float16; // Use zcbor_float16_to_32 to decode or zcbor_float32_to_16 to encode;
+		float float32;
+		double float64;
+	};
+	struct zcbor_string encoded; // The entire encoded element, including tags and payload.
+	const uint8_t* encoded_value; // Pointer to the actual value (starting with the major type) within `encoded`
+	const uint8_t* encoded_payload; // Pointer to the payload within `encoded`.
+};
 
 
 /** Take a backup of the current state. Overwrite the current elem_count. */

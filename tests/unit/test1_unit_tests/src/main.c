@@ -1434,4 +1434,104 @@ ZTEST(zcbor_unit_tests, test_zcbor_version)
 }
 
 
+ZTEST(zcbor_unit_tests, test_zcbor_any)
+{
+	uint8_t payload[100];
+	struct zcbor_element elem;
+	ZCBOR_STATE_E(state_e, 3, payload, sizeof(payload), 0);
+	ZCBOR_STATE_D(state_d, 3, payload, sizeof(payload), 30, 0);
+
+	zassert_true(zcbor_int32_put(state_e, 1), NULL);
+	zassert_true(zcbor_int64_put(state_e, -20000000000), NULL);
+	zassert_true(zcbor_uint32_put(state_e, 3), NULL);
+	zassert_true(zcbor_uint64_put(state_e, 40000000000), NULL);
+	zassert_true(zcbor_size_put(state_e, 10), NULL);
+	zassert_true(zcbor_bstr_put_lit(state_e, "Hello"), NULL);
+	zassert_true(zcbor_tstr_put_lit(state_e, "World"), NULL);
+	zassert_true(zcbor_bool_put(state_e, true), NULL);
+	zassert_true(zcbor_float16_bytes_put(state_e, 0x1234), NULL);
+	zassert_true(zcbor_float32_put(state_e, 10.5), NULL);
+	zassert_true(zcbor_float64_put(state_e, 12.7), NULL);
+	zassert_true(zcbor_nil_put(state_e, NULL), NULL);
+	zassert_true(zcbor_undefined_put(state_e, NULL), NULL);
+	zassert_true(zcbor_tag_put(state_e, 9), NULL);
+	zassert_true(zcbor_list_start_encode(state_e, 1), NULL);
+	zassert_true(zcbor_map_start_encode(state_e, 1), NULL);
+	zassert_true(zcbor_tstr_put_lit(state_e, "key"));
+	zassert_true(zcbor_tstr_put_lit(state_e, "val"));
+	zassert_true(zcbor_map_end_encode(state_e, 1), NULL);
+	zassert_true(zcbor_list_end_encode(state_e, 1), NULL);
+
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_PINT);
+	zassert_equal(elem.value, 1);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_NINT);
+	zassert_equal(elem.value, 19999999999);
+	zassert_equal(elem.neg_value, -20000000000);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_PINT);
+	zassert_equal(elem.value, 3);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_PINT);
+	zassert_equal(elem.value, 40000000000);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_PINT);
+	zassert_equal(elem.value, 10);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_BSTR);
+	zassert_equal(elem.value, 5);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_TSTR);
+	zassert_equal(elem.value, 5);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_SIMPLE);
+	zassert_equal(elem.value, 21);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_SIMPLE);
+	zassert_equal(elem.value, 0x1234);
+	zassert_equal(elem.float16, 0x1234);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_SIMPLE);
+	zassert_equal(elem.float32, 10.5);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_SIMPLE);
+	zassert_equal(elem.float64, 12.7);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_SIMPLE);
+	zassert_equal(elem.value, 22);
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_SIMPLE);
+	zassert_equal(elem.value, 23);
+
+	zassert_true(zcbor_any_decode(state_d, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_LIST);
+	zassert_equal(elem.list_map_count, 1);
+
+	zcbor_state_t state_d2[4];
+	zcbor_state_t state_d3[4];
+
+	zcbor_new_state_from_string(state_d2, 4, &elem.encoded);
+	zassert_equal(state_d2->payload_end, state_e->payload, "%x != %x\n", state_d2->payload_end, state_e->payload);
+	zassert_true(zcbor_tag_expect(state_d2, 9));
+	zassert_equal(state_d2->payload, elem.encoded_value);
+	zassert_true(zcbor_list_start_decode(state_d2));
+	zassert_equal(state_d2->payload, elem.encoded_payload);
+
+	zassert_true(zcbor_any_decode(state_d2, &elem));
+	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_MAP);
+	zassert_equal(elem.list_map_count, 1);
+
+	zcbor_new_state_from_string(state_d3, 4, &elem.encoded);
+	state_d3->payload = elem.encoded_payload;
+	state_d3->elem_count = 2;
+	zassert_true(zcbor_tstr_expect_lit(state_d3, "key"));
+	zassert_true(zcbor_tstr_expect_lit(state_d3, "val"));
+
+	state_d2->elem_count = 0;
+	zassert_true(zcbor_list_end_decode(state_d2));
+	zassert_equal(state_d2->payload, state_d2->payload_end, "%x != %x\n", state_d2->payload, state_d2->payload_end);
+}
+
+
 ZTEST_SUITE(zcbor_unit_tests, NULL, NULL, NULL, NULL, NULL);

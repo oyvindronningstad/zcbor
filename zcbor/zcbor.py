@@ -1053,7 +1053,7 @@ class CddlXcoder(CddlParser):
         return self.multi_var_condition() or self.repeated_multi_var_condition()
 
     def is_unambiguous_value(self):
-        return (self.type in ["NIL", "UNDEF", "ANY"]
+        return (self.type in ["NIL", "UNDEF"]
                 or (self.type in ["INT", "NINT", "UINT", "FLOAT", "BSTR", "TSTR", "BOOL"]
                     and self.value is not None)
                 or (self.type == "OTHER" and self.my_types[self.value].is_unambiguous()))
@@ -1110,7 +1110,7 @@ class CddlXcoder(CddlParser):
 
     # Whether to include a "cbor" variable for this element.
     def is_cbor(self):
-        return (self.type not in ["NIL", "UNDEF", "ANY"]) \
+        return (self.type not in ["NIL", "UNDEF"]) \
             and ((self.type != "OTHER") or (self.my_types[self.value].is_cbor()))
 
     # Whether to include a "cbor" variable for this element.
@@ -1885,7 +1885,7 @@ class CodeGenerator(CddlXcoder):
             "BOOL": lambda: "bool",
             "NIL": lambda: None,
             "UNDEF": lambda: None,
-            "ANY": lambda: None,
+            "ANY": lambda: "struct zcbor_element",
             "LIST": lambda: self.value[0].type_name() if len(self.value) >= 1 else None,
             "MAP": lambda: self.value[0].type_name() if len(self.value) >= 1 else None,
             "GROUP": lambda: self.value[0].type_name() if len(self.value) >= 1 else None,
@@ -2114,9 +2114,7 @@ class CodeGenerator(CddlXcoder):
         ptr_variant = ptr_result and self.type in ["UINT", "INT", "NINT", "FLOAT", "BOOL"]
         func_prefix = self.single_func_prim_prefix()
         if self.mode == "decode":
-            if self.type == "ANY":
-                func = "zcbor_any_skip"
-            elif not self.is_unambiguous_value():
+            if not self.is_unambiguous_value():
                 func = f"{func_prefix}_decode"
             elif not union_int:
                 func = f"{func_prefix}_{'pexpect' if ptr_variant else 'expect'}"
@@ -2127,9 +2125,7 @@ class CodeGenerator(CddlXcoder):
             elif union_int == "DROP":
                 return None
         else:
-            if self.type == "ANY":
-                func = "zcbor_nil_put"
-            elif (not self.is_unambiguous_value()) or self.type in ["TSTR", "BSTR"] or ptr_variant:
+            if (not self.is_unambiguous_value()) or self.type in ["TSTR", "BSTR"] or ptr_variant:
                 func = f"{func_prefix}_encode"
             else:
                 func = f"{func_prefix}_put"
@@ -2150,7 +2146,7 @@ class CodeGenerator(CddlXcoder):
         if func_name is None:
             return (None, None)
 
-        if self.type in ["NIL", "UNDEF", "ANY"]:
+        if self.type in ["NIL", "UNDEF"]:
             arg = "NULL"
         elif not self.is_unambiguous_value():
             arg = deref_if_not_null(access)

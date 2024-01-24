@@ -574,6 +574,73 @@ bool zcbor_tag_encode(zcbor_state_t *state, uint32_t *tag)
 }
 
 
+bool zcbor_any_encode(zcbor_state_t *state, struct zcbor_element *element)
+{
+	if (element->encoded.len) {
+		ZCBOR_ERR_IF(((element->encoded_payload < element->encoded.value)
+			|| (element->encoded_payload >= (element->encoded.value + element->encoded.len))
+			|| (element->encoded_value < element->encoded.value)
+			|| (element->encoded_value >= (element->encoded.value + element->encoded.len))),
+				ZCBOR_ERR_MALFORMED_ELEM);
+	}
+	ZCBOR_ERR_IF((size_t)(state->payload_end - state->payload) < element->encoded.len,
+			ZCBOR_ERR_NO_PAYLOAD);
+
+	const uint8_t *payload_bak = state->payload;
+
+	memcpy(state->payload_mut, element->encoded.value, (size_t)(element->encoded_value - element->encoded.value));
+	state->payload += element->encoded.len;
+
+	uint64_t val = element->value;
+
+	switch(element->type) {
+		case ZCBOR_MAJOR_TYPE_NINT:
+			val = ~(uint64_t)element->neg_value;
+			break;
+		case ZCBOR_MAJOR_TYPE_SIMPLE:
+			switch(element->special) {
+				case ZCBOR_SPECIAL_VAL_FALSE:
+				case ZCBOR_SPECIAL_VAL_TRUE:
+				case ZCBOR_SPECIAL_VAL_NIL:
+				case ZCBOR_SPECIAL_VAL_UNDEF:
+					val = (uint64_t)element->special;
+					break;
+				case ZCBOR_SPECIAL_VAL_FLOAT16:
+					val = (uint64_t)element->float16;
+					break;
+		#ifdef ZCBOR_BIG_ENDIAN
+				case ZCBOR_SPECIAL_VAL_FLOAT32:
+					val = element->value >> 32;
+					break;
+		#endif
+				default:
+					/* Do nothing */
+					break;
+			}
+			break;
+			default:
+				/* Do nothing */
+				break;
+	}
+	if (!value_encode(state, element->type, &element->value, sizeof(element->value))) {
+		ZCBOR_FAIL();
+	}
+
+	const size_t payload_len = (size_t)(element->encoded.value + element->encoded.len - element->encoded_payload);
+
+	if ((size_t)(state->payload_end - state->payload) < payload_len) {
+		state->elem_count--;
+		state->payload = payload_bak;
+		ZCBOR_ERR(ZCBOR_ERR_NO_PAYLOAD);
+	}
+
+	memcpy(state->payload_mut, element->encoded_payload, payload_len);
+	state->payload += payload_len;
+
+	return true;
+}
+
+
 bool zcbor_multi_encode_minmax(size_t min_encode, size_t max_encode,
 		const size_t *num_encode, zcbor_encoder_t encoder,
 		zcbor_state_t *state, const void *input, size_t result_len)
