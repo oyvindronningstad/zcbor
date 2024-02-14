@@ -1467,7 +1467,7 @@ ZTEST(zcbor_unit_tests, test_zcbor_any)
 	zassert_equal(elem.value, 1);
 	zassert_true(zcbor_any_decode(state_d, &elem));
 	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_NINT);
-	zassert_equal(elem.value, 19999999999);
+	zassert_equal(elem.raw_value, 19999999999);
 	zassert_equal(elem.neg_value, -20000000000);
 	zassert_true(zcbor_any_decode(state_d, &elem));
 	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_PINT);
@@ -1486,10 +1486,11 @@ ZTEST(zcbor_unit_tests, test_zcbor_any)
 	zassert_equal(elem.value, 5);
 	zassert_true(zcbor_any_decode(state_d, &elem));
 	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_SIMPLE);
-	zassert_equal(elem.value, 21);
+	zassert_equal(elem.bool_value, true);
+	zassert_equal(elem.raw_value, 21);
 	zassert_true(zcbor_any_decode(state_d, &elem));
 	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_SIMPLE);
-	zassert_equal(elem.value, 0x1234);
+	zassert_equal(elem.raw_value, 0x1234);
 	zassert_equal(elem.float16, 0x1234);
 	zassert_true(zcbor_any_decode(state_d, &elem));
 	zassert_equal(elem.type, ZCBOR_MAJOR_TYPE_SIMPLE);

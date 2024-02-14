@@ -277,27 +277,42 @@ do { \
 /** Initial value for elem_count for when it just needs to be large. */
 #define ZCBOR_LARGE_ELEM_COUNT (ZCBOR_MAX_ELEM_COUNT - 15)
 
-enum zcbor_special_val {
-	ZCBOR_SPECIAL_VAL_FALSE = ZCBOR_BOOL_TO_SIMPLE,
-	ZCBOR_SPECIAL_VAL_TRUE,
-	ZCBOR_SPECIAL_VAL_NIL,
-	ZCBOR_SPECIAL_VAL_UNDEF,
-	ZCBOR_SPECIAL_VAL_SIMPLE, // Any unallocated simple value (0-19, 32-255).
-	ZCBOR_SPECIAL_VAL_FLOAT16,
-	ZCBOR_SPECIAL_VAL_FLOAT32,
-	ZCBOR_SPECIAL_VAL_FLOAT64,
-};
 
 /** Container for a single CBOR element, including its tags and contents.
  *  For lists and maps, the child elements can be decoded from the encoded_payload. */
 struct zcbor_element {
+	struct zcbor_string encoded_tags;
+	uint16_t num_tags;
 	zcbor_major_type_t type;
+	uint8_t additional; // Used for major_type != MAJOR_TYPE_SIMPLE
+	uint64_t raw_value; // Raw value. When ZCBOR_VALUE_IS_INDEFINITE_LENGTH, raw_value is the count of elements.
+	struct zcbor_string encoded_payload;
+};
+
+/** All the different data types available in pure CBOR. Arranged to correspond to the
+    values they have in the data. */
+enum zcbor_type {
+	ZCBOR_TYPE_PINT = ZCBOR_MAJOR_TYPE_PINT, ///! Positive Integer
+	ZCBOR_TYPE_NINT = ZCBOR_MAJOR_TYPE_NINT, ///! Negative Integer
+	ZCBOR_TYPE_BSTR = ZCBOR_MAJOR_TYPE_BSTR, ///! Byte String
+	ZCBOR_TYPE_TSTR = ZCBOR_MAJOR_TYPE_TSTR, ///! Text String
+	ZCBOR_TYPE_LIST = ZCBOR_MAJOR_TYPE_LIST, ///! List
+	ZCBOR_TYPE_MAP = ZCBOR_MAJOR_TYPE_MAP, ///! Map
+
+	ZCBOR_TYPE_BOOL = ZCBOR_BOOL_TO_SIMPLE, ///! True of false
+	ZCBOR_TYPE_NIL = ZCBOR_NIL_VAL,
+	ZCBOR_TYPE_UNDEFINED = ZCBOR_UNDEF_VAL,
+	ZCBOR_TYPE_SIMPLE = ZCBOR_VALUE_IS_1_BYTE, ///! Any unallocated simple value (0-19, 32-255).
+	ZCBOR_TYPE_FLOAT16 = ZCBOR_VALUE_IS_2_BYTES,
+	ZCBOR_TYPE_FLOAT32 = ZCBOR_VALUE_IS_4_BYTES,
+	ZCBOR_TYPE_FLOAT64 = ZCBOR_VALUE_IS_8_BYTES,
+};
+
+/** Interpretation of the raw_value from struct zcbor_element. */
+struct zcbor_element_value {
+	enum zcbor_type type;
 	union {
-		uint8_t additional; // Used for major_type != MAJOR_TYPE_SIMPLE
-		enum zcbor_special_val special; // Used for MAJOR_TYPE_SIMPLE
-	};
-	uint64_t value; // Raw value. Is 0 whenever additional is ZCBOR_VALUE_IS_INDEFINITE_LENGTH.
-	union {
+		uint64_t value; // Used for PINT, TSTR, BSTR, and SIMPLE (not bools or floats)
 		int64_t neg_value; // Used for NINT
 		uint64_t list_map_count; // Number of elements in a LIST or MAP
 		bool bool_value; // Used for bools
@@ -305,9 +320,6 @@ struct zcbor_element {
 		float float32;
 		double float64;
 	};
-	struct zcbor_string encoded; // The entire encoded element, including tags and payload.
-	const uint8_t* encoded_value; // Pointer to the actual value (starting with the major type) within `encoded`
-	const uint8_t* encoded_payload; // Pointer to the payload within `encoded`.
 };
 
 

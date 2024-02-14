@@ -416,6 +416,49 @@ uint16_t zcbor_float32_to_16(float input)
 }
 
 
+bool zcbor_interpret_element(struct zcbor_element *elem, struct zcbor_element_value *val_out)
+{
+	struct zcbor_element_value val_out->
+
+	val_out->type = elem->type;
+	val_out->value = elem->raw_value;
+
+	switch (elem->type) {
+	case ZCBOR_MAJOR_TYPE_NINT:
+		err = val_to_int(elem.type, &val_out->neg_value, sizeof(val_out->neg_value));
+		ZCBOR_ERR_IF(err != ZCBOR_SUCCESS, err);
+		break;
+	case ZCBOR_MAJOR_TYPE_MAP:
+		val_out->list_map_count = value / 2;
+		break;
+	case ZCBOR_MAJOR_TYPE_LIST:
+		val_out->list_map_count = value;
+		break;
+	case ZCBOR_MAJOR_TYPE_SIMPLE:
+		val_out->type = elem->additional;
+		if (val_out->type < ZCBOR_SPECIAL_VAL_FALSE) {
+			val_out->type = ZCBOR_TYPE_SIMPLE;
+		} else if (val_out->type <= ZCBOR_TYPE_BOOL) {
+			val_out->bool_value = val_out->type - ZCBOR_SPECIAL_VAL_FALSE;
+#ifdef ZCBOR_BIG_ENDIAN
+		} else if (val_out->type == ZCBOR_TYPE_FLOAT16) {
+			val_out->float16 = (uint16_t)val_out->value;
+		} else if (val_out->type == ZCBOR_TYPE_FLOAT32) {
+			*(uint32_t *)&val_out->float32 = (uint32_t)val_out->value;
+#endif
+		} else if (val_out->type > ZCBOR_TYPE_FLOAT64) {
+			ZCBOR_ERR(ZCBOR_ERR_ADDITIONAL_INVAL);
+		}
+		break;
+	default:
+		/* Do nothing */
+		break;
+	}
+
+	return true;
+}
+
+
 /** Weak strnlen() implementation in case it is not available.
  *
  * This function is in the public domain, according to:

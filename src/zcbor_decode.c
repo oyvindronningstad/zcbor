@@ -1422,6 +1422,7 @@ bool zcbor_any_decode(zcbor_state_t *state, struct zcbor_element *element)
 	/* INITIAL_CHECKS(); done by zcbor_tag_decode() below. */
 	zcbor_state_t state_copy;
 	uint32_t tag_dummy;
+	uint16_t num_tags = 0;
 	struct zcbor_element elem = {0};
 	uint64_t value = 0;
 	size_t init_elem_count;
@@ -1433,7 +1434,9 @@ bool zcbor_any_decode(zcbor_state_t *state, struct zcbor_element *element)
 
 	elem.encoded.value = state_copy.payload;
 
-	while (zcbor_tag_decode(&state_copy, &tag_dummy));
+	while (zcbor_tag_decode(&state_copy, &tag_dummy)) {
+		num_tags++;
+	}
 
 	elem.encoded_value = state_copy.payload;
 	elem.type = ZCBOR_MAJOR_TYPE(*state_copy.payload);
@@ -1481,6 +1484,7 @@ bool zcbor_any_decode(zcbor_state_t *state, struct zcbor_element *element)
 
 			if (indefinite_length_array) {
 				state_copy.payload++; /* payload bounds checked by zcbor_array_at_end(). */
+				value = list_map_count;
 			}
 			break;
 		default:
@@ -1490,8 +1494,9 @@ bool zcbor_any_decode(zcbor_state_t *state, struct zcbor_element *element)
 
 	if (element) {
 		elem.encoded.len = (size_t)state_copy.payload - (size_t)elem.encoded.value;
+		elem.raw_value = value;
 		elem.value = value;
-		elem.neg_value = (int64_t)value;
+		elem.num_tags = num_tags;
 
 		switch (elem.type) {
 			case ZCBOR_MAJOR_TYPE_NINT:

@@ -641,6 +641,30 @@ bool zcbor_any_encode(zcbor_state_t *state, struct zcbor_element *element)
 }
 
 
+bool zcbor_any_encode(zcbor_state_t *state, struct zcbor_element *element)
+{
+	size_t header_len = zcbor_header_len(element->raw_value);
+
+	ZCBOR_ERR_IF((size_t)(state->payload_end - state->payload)
+		< (element->encoded_tags.len + header_len + element->encoded_payload.len),
+			ZCBOR_ERR_NO_PAYLOAD);
+
+	const uint8_t *payload_bak = state->payload;
+
+	memcpy(state->payload_mut, element->encoded_tags.value, element->encoded_tags.len);
+	state->payload += element->encoded.len;
+
+	if (!value_encode(state, element->type, &element->raw_value, sizeof(element->value))) {
+		ZCBOR_FAIL();
+	}
+
+	memcpy(state->payload_mut, element->encoded_payload.value, element->encoded_payload.len);
+	state->payload += element->encoded.len;
+
+	return true;
+}
+
+
 bool zcbor_multi_encode_minmax(size_t min_encode, size_t max_encode,
 		const size_t *num_encode, zcbor_encoder_t encoder,
 		zcbor_state_t *state, const void *input, size_t result_len)
