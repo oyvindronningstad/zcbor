@@ -418,7 +418,7 @@ uint16_t zcbor_float32_to_16(float input)
 
 bool zcbor_interpret_element(struct zcbor_element *elem, struct zcbor_element_value *val_out)
 {
-	struct zcbor_element_value val_out->
+	struct zcbor_element_value val_out;
 
 	val_out->type = elem->type;
 	val_out->value = elem->raw_value;

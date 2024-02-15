@@ -1432,7 +1432,7 @@ bool zcbor_any_decode(zcbor_state_t *state, struct zcbor_element *element)
 
 	memcpy(&state_copy, state, sizeof(zcbor_state_t));
 
-	elem.encoded.value = state_copy.payload;
+	elem.encoded_tags.value = state_copy.payload;
 
 	while (zcbor_tag_decode(&state_copy, &tag_dummy)) {
 		num_tags++;
@@ -1497,36 +1497,6 @@ bool zcbor_any_decode(zcbor_state_t *state, struct zcbor_element *element)
 		elem.raw_value = value;
 		elem.value = value;
 		elem.num_tags = num_tags;
-
-		switch (elem.type) {
-			case ZCBOR_MAJOR_TYPE_NINT:
-				err = val_to_int(elem.type, &elem.neg_value, sizeof(elem.neg_value));
-				ZCBOR_ERR_IF(err != ZCBOR_SUCCESS, err);
-				break;
-			case ZCBOR_MAJOR_TYPE_MAP:
-				elem.list_map_count = list_map_count / 2;
-				break;
-			case ZCBOR_MAJOR_TYPE_LIST:
-				elem.list_map_count = list_map_count;
-				break;
-			case ZCBOR_MAJOR_TYPE_SIMPLE:
-				elem.special = elem.additional;
-				if (elem.special < ZCBOR_SPECIAL_VAL_FALSE) {
-					elem.special = ZCBOR_SPECIAL_VAL_SIMPLE;
-				} else if (elem.special <= ZCBOR_SPECIAL_VAL_TRUE) {
-					elem.bool_value = elem.special - ZCBOR_SPECIAL_VAL_FALSE;
-		#ifdef ZCBOR_BIG_ENDIAN
-				} else if (elem.special == ZCBOR_SPECIAL_VAL_FLOAT16) {
-					elem.float16 = (uint16_t)elem.value;
-				} else if (elem.special == ZCBOR_SPECIAL_VAL_FLOAT32) {
-					*(uint32_t *)&elem.float32 = (uint32_t)elem.value;
-		#endif
-				}
-				break;
-			default:
-				/* Do nothing */
-				break;
-		}
 		memcpy(element, &elem, sizeof(*element));
 	}
 
