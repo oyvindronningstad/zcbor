@@ -283,9 +283,16 @@ do { \
 struct zcbor_element {
 	struct zcbor_string encoded_tags;
 	uint16_t num_tags;
-	zcbor_major_type_t type;
-	uint8_t additional; // Used for major_type != MAJOR_TYPE_SIMPLE
-	uint64_t raw_value; // Raw value. When ZCBOR_VALUE_IS_INDEFINITE_LENGTH, raw_value is the count of elements.
+	enum zcbor_type type;
+	union {
+		uint64_t value; // Used for PINT, TSTR, BSTR, and SIMPLE (not bools or floats)
+		int64_t neg_value; // Used for NINT
+		uint64_t list_map_count; // Number of elements in a LIST or MAP
+		bool bool_value; // Used for bools
+		uint16_t float16; // Use zcbor_float16_to_32 to decode or zcbor_float32_to_16 to encode;
+		float float32;
+		double float64;
+	};
 	struct zcbor_string encoded_payload;
 };
 
@@ -310,16 +317,6 @@ enum zcbor_type {
 
 /** Interpretation of the raw_value from struct zcbor_element. */
 struct zcbor_element_value {
-	enum zcbor_type type;
-	union {
-		uint64_t value; // Used for PINT, TSTR, BSTR, and SIMPLE (not bools or floats)
-		int64_t neg_value; // Used for NINT
-		uint64_t list_map_count; // Number of elements in a LIST or MAP
-		bool bool_value; // Used for bools
-		uint16_t float16; // Use zcbor_float16_to_32 to decode or zcbor_float32_to_16 to encode;
-		float float32;
-		double float64;
-	};
 };
 
 
