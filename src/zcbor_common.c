@@ -135,20 +135,17 @@ void zcbor_new_state(zcbor_state_t *state_array, size_t n_states,
 		const uint8_t *payload, size_t payload_len, size_t elem_count,
 		uint8_t *flags, size_t flags_bytes)
 {
+	memset(&state_array[0], 0, sizeof(zcbor_state_t));
+
 	state_array[0].payload = payload;
 	state_array[0].payload_end = payload + payload_len;
 	state_array[0].elem_count = elem_count;
-	state_array[0].payload_moved = false;
-	state_array[0].decode_state.indefinite_length_array = false;
 #ifdef ZCBOR_MAP_SMART_SEARCH
 	state_array[0].decode_state.map_search_elem_state = flags;
-	state_array[0].decode_state.map_elem_count = 0;
 #else
-	state_array[0].decode_state.map_elems_processed = 0;
 	(void)flags;
 	(void)flags_bytes;
 #endif
-	state_array[0].constant_state = NULL;
 
 	if (n_states < 2) {
 		return;
@@ -156,12 +153,15 @@ void zcbor_new_state(zcbor_state_t *state_array, size_t n_states,
 
 	/* Use the last state as a struct zcbor_state_constant object. */
 	state_array[0].constant_state = (struct zcbor_state_constant *)&state_array[n_states - 1];
-	state_array[0].constant_state->backup_list = NULL;
+	memset(state_array[0].constant_state, 0, sizeof(zcbor_state_constant));
+
 	state_array[0].constant_state->num_backups = n_states - 2;
-	state_array[0].constant_state->current_backup = 0;
 	state_array[0].constant_state->error = ZCBOR_SUCCESS;
 #ifdef ZCBOR_STOP_ON_ERROR
-	state_array[0].constant_state->stop_on_error = false;
+	#warning "ZCBOR_STOP_ON_ERROR is deprecated and will be removed in a future release. " \
+	"It currently has no effect, and can be assumed to always be defined. " \
+	"PLEASE NOTE: As before, the stop_on_error functionality must also be enabled at runtime. " \
+	"This is done in the constant_state of the state struct."
 #endif
 	state_array[0].constant_state->enforce_canonical = ZCBOR_ENFORCE_CANONICAL_DEFAULT;
 	state_array[0].constant_state->manually_process_elem = ZCBOR_MANUALLY_PROCESS_ELEM_DEFAULT;

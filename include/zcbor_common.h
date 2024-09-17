@@ -142,9 +142,7 @@ struct zcbor_state_constant {
 	size_t current_backup;
 	size_t num_backups;
 	int error;
-#ifdef ZCBOR_STOP_ON_ERROR
 	bool stop_on_error;
-#endif
 	bool enforce_canonical; /**< Fail when decoding if data is non-canonical.
 	                             The default/initial value follows ZCBOR_CANONICAL */
 	bool manually_process_elem; /**< Whether an (unordered map) element should be automatically
@@ -167,6 +165,7 @@ struct zcbor_state_constant {
 
 #define ZCBOR_MANUALLY_PROCESS_ELEM(state) (state->constant_state \
 	? state->constant_state->manually_process_elem : ZCBOR_MANUALLY_PROCESS_ELEM_DEFAULT)
+
 
 /** Function pointer type used with zcbor_multi_decode.
  *
@@ -233,16 +232,12 @@ do {\
 #define ZCBOR_CHECK_PAYLOAD() \
 	ZCBOR_ERR_IF(state->payload >= state->payload_end, ZCBOR_ERR_NO_PAYLOAD)
 
-#ifdef ZCBOR_STOP_ON_ERROR
 #define ZCBOR_CHECK_ERROR()  \
 do { \
 	if (!zcbor_check_error(state)) { \
 		ZCBOR_FAIL(); \
 	} \
 } while(0)
-#else
-#define ZCBOR_CHECK_ERROR()
-#endif
 
 #define ZCBOR_VALUE_IN_HEADER 23 ///! Values below this are encoded directly in the header.
 #define ZCBOR_VALUE_IS_1_BYTE 24 ///! The next 1 byte contains the value.
@@ -344,7 +339,6 @@ int zcbor_entry_function(const uint8_t *payload, size_t payload_len,
 	void *result, size_t *payload_len_out, zcbor_state_t *state, zcbor_decoder_t func,
 	size_t n_states, size_t elem_count);
 
-#ifdef ZCBOR_STOP_ON_ERROR
 /** Check stored error and fail if present, but only if stop_on_error is true.
  *
  * @retval true   No error found
@@ -355,7 +349,6 @@ static inline bool zcbor_check_error(const zcbor_state_t *state)
 	struct zcbor_state_constant *cs = state->constant_state;
 	return !(cs && cs->stop_on_error && cs->error);
 }
-#endif
 
 /** Return the current error state, replacing it with SUCCESS. */
 static inline int zcbor_pop_error(zcbor_state_t *state)
@@ -382,13 +375,8 @@ static inline int zcbor_peek_error(const zcbor_state_t *state)
 /** Write the provided error to the error state. */
 static inline void zcbor_error(zcbor_state_t *state, int err)
 {
-#ifdef ZCBOR_STOP_ON_ERROR
-	if (zcbor_check_error(state))
-#endif
-	{
-		if (state->constant_state) {
-			state->constant_state->error = err;
-		}
+	if (state->constant_state) {
+		state->constant_state->error = err;
 	}
 }
 
