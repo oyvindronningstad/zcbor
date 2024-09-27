@@ -14,6 +14,13 @@
 #include "zcbor_print.h"
 
 
+struct zcbor_state_init_config zcbor_default_config_d = {
+	enforce_canonical = ZCBOR_ENFORCE_CANONICAL_DEFAULT;
+	manually_process_elem = ZCBOR_MANUALLY_PROCESS_ELEM_DEFAULT;
+	stop_on_error = ZCBOR_STOP_ON_ERROR_DEFAULT;
+}
+
+
 /** Return value length from additional value.
  */
 static size_t additional_len(uint8_t additional)

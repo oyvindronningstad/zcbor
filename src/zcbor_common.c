@@ -171,6 +171,19 @@ void zcbor_new_state(zcbor_state_t *state_array, size_t n_states,
 	if (n_states > 2) {
 		state_array[0].constant_state->backup_list = &state_array[1];
 	}
+
+	zcbor_init_new_state(state_array[0], &zcbor_default_config_d)
+}
+
+
+void zcbor_init_new_state(zcbor_state_t *state, struct zcbor_state_init_config *init)
+{
+	if (!init || !state->constant_state) {
+		return;
+	}
+	state->constant_state->enforce_canonical = init->enforce_canonical;
+	state->constant_state->manually_process_elem = init->manually_process_elem;
+	state->constant_state->stop_on_error = init->stop_on_error;
 }
 
 void zcbor_update_state(zcbor_state_t *state,

@@ -16,6 +16,12 @@ _Static_assert((sizeof(size_t) == sizeof(void *)),
 	"This code needs size_t to be the same length as pointers.");
 
 
+struct zcbor_state_init_config zcbor_default_config_e = {
+	enforce_canonical = false;
+	manually_process_elem = false;
+	stop_on_error = false;
+}
+
 static uint8_t log2ceil(size_t val)
 {
 	switch(val) {

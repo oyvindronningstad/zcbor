@@ -28,6 +28,8 @@ void zcbor_new_decode_state(zcbor_state_t *state_array, size_t n_states,
 		const uint8_t *payload, size_t payload_len, size_t elem_count,
 		uint8_t *elem_state, size_t elem_state_bytes);
 
+extern struct zcbor_state_init_config zcbor_default_config_d;
+
 /** Convenience macro for declaring and initializing a decoding state with backups.
  *
  *  This gives you a state variable named @p name. The variable functions like
@@ -42,13 +44,21 @@ void zcbor_new_decode_state(zcbor_state_t *state_array, size_t n_states,
  *                            The total number of unordered map search flags needed.
  *                            I.e. the largest number of elements expected in an unordered map,
  *                            including elements in nested unordered maps.
+ *  @param[in]  init          The initialization struct to use. If NULL, the default config is used.
  */
-#define ZCBOR_STATE_D(name, num_backups, payload, payload_size, elem_count, n_flags) \
+#define ZCBOR_STATE_D_MAX(name, num_backups, payload, payload_size, elem_count, n_flags, init) \
 zcbor_state_t name[((num_backups) + 2 + ZCBOR_FLAG_STATES(n_flags))]; \
 do { \
 	zcbor_new_decode_state(name, ZCBOR_ARRAY_SIZE(name), payload, payload_size, elem_count, \
 			(uint8_t *)&name[(num_backups) + 1], ZCBOR_FLAG_STATES(n_flags) * sizeof(zcbor_state_t)); \
+	zcbor_init_new_state(name, init ? init : &zcbor_init_new_state);
 } while(0)
+
+#define ZCBOR_STATE_D(name, num_backups, payload, payload_size, elem_count, n_flags) \
+	ZCBOR_STATE_D_MAX(name, num_backups, payload, payload_size, elem_count, n_flags, NULL)
+
+#define ZCBOR_STATE_D_MIN(name, payload, payload_size) \
+	ZCBOR_STATE_D_MAX(name, 2, payload, payload_size, 1, 0, NULL)
 
 
 /** The following applies to all _decode() functions listed directly below.

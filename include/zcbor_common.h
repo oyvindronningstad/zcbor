@@ -152,6 +152,14 @@ struct zcbor_state_constant {
 #endif
 };
 
+/* Initialization struct for values in the constant state, for use in zcbor_init_new_state(). */
+struct zcbor_state_init_config {
+	bool enforce_canonical;
+	bool manually_process_elem;
+	bool stop_on_error;
+};
+
+
 #ifdef ZCBOR_CANONICAL
 #define ZCBOR_ENFORCE_CANONICAL_DEFAULT true
 #else
