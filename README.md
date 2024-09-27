@@ -102,6 +102,7 @@ Name                      | Description
 `ZCBOR_ASSERTS`           | Enable asserts (`zcbor_assert()`). When they fail, the assert statements instruct the current function to return a `ZCBOR_ERR_ASSERTION` error. If `ZCBOR_VERBOSE` is enabled, a message is printed.
 `ZCBOR_BIG_ENDIAN`        | All decoded values are returned as big-endian. The default is little-endian.
 `ZCBOR_MAP_SMART_SEARCH`  | Applies to decoding of unordered maps. When enabled, a flag is kept for each element in an array, ensuring it is not processed twice. If disabled, a count is kept for map as a whole. Enabling increases code size and memory usage, and requires the state variable to possess the memory necessary for the flags.
+`ZCBOR_STOP_ON_ERROR_DEFAULT_TRUE` | Make `stop_on_error` default to `true` when initializing zcbor state structs.
 
 
 Python script and module

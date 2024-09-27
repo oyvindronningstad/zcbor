@@ -161,7 +161,10 @@ void zcbor_new_state(zcbor_state_t *state_array, size_t n_states,
 	#warning "ZCBOR_STOP_ON_ERROR is deprecated and will be removed in a future release. " \
 	"It currently has no effect, and can be assumed to always be defined. " \
 	"PLEASE NOTE: As before, the stop_on_error functionality must also be enabled at runtime. " \
-	"This is done in the constant_state of the state struct."
+	"This is done in the constant_state of the state struct. " \
+	"A new ZCBOR_STOP_ON_ERROR_DEFAULT_TRUE has been added which when defined will set the " \
+	"stop_on_error flag to true by default when state structs are initialized via the " \
+	"appropriate zcbor macros/functions."
 #endif
 	state_array[0].constant_state->enforce_canonical = ZCBOR_ENFORCE_CANONICAL_DEFAULT;
 	state_array[0].constant_state->manually_process_elem = ZCBOR_MANUALLY_PROCESS_ELEM_DEFAULT;

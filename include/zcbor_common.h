@@ -174,6 +174,15 @@ struct zcbor_state_init_config {
 #define ZCBOR_MANUALLY_PROCESS_ELEM(state) (state->constant_state \
 	? state->constant_state->manually_process_elem : ZCBOR_MANUALLY_PROCESS_ELEM_DEFAULT)
 
+#if ZCBOR_STOP_ON_ERROR_DEFAULT_TRUE
+#define ZCBOR_STOP_ON_ERROR_DEFAULT true
+#else
+#define ZCBOR_STOP_ON_ERROR_DEFAULT false
+#endif
+
+/* Since the error is also kept in the constant_state, this can default to false. */
+#define ZCBOR_DO_STOP_ON_ERROR(state) (state->constant_state \
+	? state->constant_state->stop_on_error : false)
 
 /** Function pointer type used with zcbor_multi_decode.
  *
@@ -355,7 +364,7 @@ int zcbor_entry_function(const uint8_t *payload, size_t payload_len,
 static inline bool zcbor_check_error(const zcbor_state_t *state)
 {
 	struct zcbor_state_constant *cs = state->constant_state;
-	return !(cs && cs->stop_on_error && cs->error);
+	return !(ZCBOR_DO_STOP_ON_ERROR(state) && cs->error);
 }
 
 /** Return the current error state, replacing it with SUCCESS. */
