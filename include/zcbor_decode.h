@@ -51,7 +51,7 @@ zcbor_state_t name[((num_backups) + 2 + ZCBOR_FLAG_STATES(n_flags))]; \
 do { \
 	zcbor_new_decode_state(name, ZCBOR_ARRAY_SIZE(name), payload, payload_size, elem_count, \
 			(uint8_t *)&name[(num_backups) + 1], ZCBOR_FLAG_STATES(n_flags) * sizeof(zcbor_state_t)); \
-	zcbor_init_new_state(name, init ? init : &zcbor_init_new_state);
+	zcbor_init_new_state(name, init ? init : &zcbor_default_config_d);
 } while(0)
 
 #define ZCBOR_STATE_D(name, num_backups, payload, payload_size, elem_count, n_flags) \
