@@ -72,9 +72,9 @@ MultiGroup = +(3,-4)
 Union = Group / MultiGroup / (3,4) / "\"hello\""
 
 Map = {
-	listkey: [5,6] => bool,
+	listkey: ((([5,6] => bool))),
 	union: (7=>uint) / (-8=>uint),
-	twotothree: 2*3 nil => bstr,
+	twotothree: (2*3 (nil => bstr)),
 }
 
 EmptyMap = {}
@@ -103,8 +103,10 @@ ValueRange = [
 	lesseq1: uint .le 1,
 	equal42: uint .eq 42,
 	equalstrworld: tstr .eq "world",
+	equalpi: float .size 8 .eq ((( 3.14 ))),
+	equaltrue: bool .eq true,
 	default3: ?int .gt 2 .default 3,
-	defaulthello: ?bstr .default 'hello',
+	defaulthello: ?bstr .default ((('hello'))),
 	defaulte: ?float .size 4 .default 2.72,
 	defaultfalse: ?bool .default false,
 ]
