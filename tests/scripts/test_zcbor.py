@@ -1300,5 +1300,78 @@ class TestInvalidIdentifiers(TestCase):
         self.assertTrue(decoded.a_z_tstr)
 
 
+def cp_from_cddl(cddl):
+    return zcbor.CddlParser.from_cddl(cddl, default_max_qty=3)
+
+
+class TestParsingErrors(TestCase):
+    def cddl_parsing_error_test(self, invalid_cddl, valid_cddl, message_regex=None):
+        """Check that invalid CDDL raises an error and check that a valid CDDL variant passes."""
+        self.assertTrue(cp_from_cddl(valid_cddl))
+        if message_regex is not None:
+            self.assertRaisesRegex(
+                zcbor.CddlParsingError, message_regex, cp_from_cddl, invalid_cddl
+            )
+        else:
+            self.assertRaises(zcbor.CddlParsingError, cp_from_cddl, invalid_cddl)
+
+    def test_invalid_cddl(self):
+        """Check that certain CDDL formatting errors are caught."""
+
+        # Two values
+        self.cddl_parsing_error_test(
+            "foo = 1 .eq 2", "foo = int .eq 2", r".*Attempting to set value.*"
+        )
+
+        # Float vs int
+        self.cddl_parsing_error_test(
+            "foo = float .eq 2",
+            "foo = float .eq 2.0",
+            r"Type of \.eq value does not match type of element",
+        )
+
+        # tstr vs int
+        self.cddl_parsing_error_test(
+            'foo = ?int .default "hello"',
+            'foo = ?tstr .default "hello"',
+            r"Type of \.default value does not match type of element",
+        )
+
+        # default without ?
+        self.cddl_parsing_error_test(
+            'foo = tstr .default "hello"',
+            'foo = ?tstr .default "hello"',
+            r"zcbor currently supports \.default only with the \? quantifier",
+        )
+
+        # Missing key
+        self.cddl_parsing_error_test("foo = {int}", "foo = {1 => int}", r"Missing map key")
+        self.cddl_parsing_error_test(
+            "bar = (int) foo = {bar}", "bar = (1 => int) foo = {bar}", r"Missing map key"
+        )
+
+        # .size not allowed on type
+        self.cddl_parsing_error_test(
+            "foo = bool .size 1", "foo = int .size 1", r"\.size cannot be applied to BOOL"
+        )
+        self.cddl_parsing_error_test(
+            "foo = [] .size 1", "foo = int .size 1", r"\.size cannot be applied to LIST"
+        )
+
+        # double size
+        self.cddl_parsing_error_test(
+            "foo = float32 .size 2",
+            "foo = float32 .size 4",
+            r"Attempting to set size to 2, but size is already 4",
+        )
+
+        self.cddl_parsing_error_test(
+            "foo = *+int", "foo = +int", r"Cannot add a second quantifier: \+"
+        )
+        self.cddl_parsing_error_test(
+            "foo = int*", "foo = *int", r"Cannot have quantifier after type: \*"
+        )
+
+
 if __name__ == "__main__":
     main()
