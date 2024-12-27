@@ -35,6 +35,7 @@ import sys
 from site import USER_BASE
 from textwrap import wrap, indent
 from importlib.metadata import version
+from copy import copy
 
 regex_cache = {}
 indentation = "\t"
@@ -263,6 +264,7 @@ class CddlParser:
         self.min_value = None  # Minimum value. Only used for numbers and bools.
         # The readable label associated with the element in the CDDL.
         self.label = None
+        self.reference = None  # Used in OTHER types to hold the name of the type it references.
         self.min_qty = 1  # The minimum number of times this element is repeated.
         self.max_qty = 1  # The maximum number of times this element is repeated.
         # The size of the element. Only used for integers, byte strings, and
@@ -312,10 +314,33 @@ class CddlParser:
             self.cddl_regexes_init()
 
     def post_process(self):
+        """Post process this element after all CDDL has been parsed.
+
+        This is recursive, so it will post_validate all its children + key + cbor."""
+
         self.post_validate()
+        self.create_composite()
+
+        # Processing of child elements.
+        if self.type in ["MAP", "LIST", "UNION", "GROUP"]:
+            for child in self.value:
+                child.post_process()
+        if self.key:
+            self.key.post_process()
+        if self.cbor:
+            self.cbor.post_process()
 
     def post_process_control_group(self):
         self.post_validate_control_group()
+
+        # Processing of child elements.
+        if self.type in ["MAP", "LIST", "UNION", "GROUP"]:
+            for child in self.value:
+                child.post_process_control_group()
+        if self.key:
+            self.key.post_process_control_group()
+        if self.cbor:
+            self.cbor.post_process_control_group()
 
     @classmethod
     def from_cddl(cddl_class, cddl_string, default_max_qty, *args, **kwargs):
@@ -403,7 +428,8 @@ class CddlParser:
             # The label is the default if present:
             self.label
             # Name a key/value pair by its key type or string value:
-            or (self.key.value if self.key and self.key.type in ["TSTR", "OTHER"] else None)
+            or (self.key.value if self.key and self.key.type == "TSTR" else None)
+            or (self.key.reference if self.key and self.key.type == "OTHER" else None)
             # Name a string by its expected value:
             or (
                 f"{self.value.replace(self.backslash_quotation_mark, '')}_{self.type.lower()}"
@@ -421,7 +447,7 @@ class CddlParser:
             # Name a control group by its name
             or (next((key for key, value in self.my_control_groups.items() if value == self), None))
             # Name an instance by its type:
-            or (self.value + "_m" if self.type == "OTHER" else None)
+            or (self.reference + "_m" if self.type == "OTHER" else None)
             # Name a list by its first element:
             or (
                 self.value[0].get_base_name() + "_l"
@@ -429,10 +455,9 @@ class CddlParser:
                 else None
             )
             # Name a cbor-encoded bstr by its expected cbor contents:
+            or ((self.cbor.value + "_bstr") if self.cbor and self.cbor.type == "TSTR" else None)
             or (
-                (self.cbor.value + "_bstr")
-                if self.cbor and self.cbor.type in ["TSTR", "OTHER"]
-                else None
+                (self.cbor.reference + "_bstr") if self.cbor and self.cbor.type == "OTHER" else None
             )
             # Name a key value pair by its key (regardless of the key type)
             or ((self.key.generate_base_name() + self.type.lower()) if self.key else None)
@@ -545,7 +570,7 @@ class CddlParser:
                 self.type in ["INT", "NINT", "UINT", "FLOAT", "BSTR", "TSTR", "BOOL"]
                 and self.value is not None
             )
-            or (self.type == "OTHER" and self.my_types[self.value].is_unambiguous())
+            or (self.type == "OTHER" and self.my_types[self.reference].is_unambiguous())
         )
 
     def is_unambiguous_repeated(self):
@@ -579,7 +604,7 @@ class CddlParser:
     def flatten(self, allow_multi=False):
         """Remove unneccessary abstractions, like single-element groups or unions."""
         self._flatten()
-        if self.type == "OTHER" and self.is_socket and self.value not in self.my_types:
+        if self.type == "OTHER" and self.is_socket and self.reference not in self.my_types:
             return []
         if (
             self.type in ["GROUP", "UNION"]
@@ -606,28 +631,32 @@ class CddlParser:
     def set_max_value(self, max_value):
         self.max_value = max_value
 
+    def set_min_comp_modifier(self, modifier, min_value):
+        self.modifiers.add(modifier)
+        self.set_min_value(min_value)
+
+    def set_max_comp_modifier(self, modifier, max_value):
+        self.modifiers.add(modifier)
+        self.set_max_value(max_value)
+
     def set_gt(self, gt_value):
-        self.modifiers.add(".gt")
-        self.set_min_value(int(gt_value, 0) + 1)
+        self.set_min_comp_modifier(".gt", int(gt_value, 0) + 1)
 
     def set_lt(self, lt_value):
-        self.modifiers.add(".lt")
-        self.set_max_value(int(lt_value, 0) - 1)
+        self.set_min_comp_modifier(".lt", int(lt_value, 0) - 1)
 
     def set_ge(self, ge_value):
-        self.modifiers.add(".ge")
-        self.set_min_value(int(ge_value, 0))
+        self.set_min_comp_modifier(".ge", int(ge_value, 0))
 
     def set_le(self, le_value):
-        self.modifiers.add(".le")
-        self.set_max_value(int(le_value, 0))
+        self.set_min_comp_modifier(".le", int(le_value, 0))
 
     def set_size_value(self, size):
         self.modifiers.add(".size")
         self.set_size(int(size, 0))
 
     def set_size_values(self, minsize, maxsize, inc_end=True):
-        self.modifiers.add(".size")
+        self.modifiers.add(".sizerange")
         self.set_size_range(int(minsize, 0), int(maxsize, 0), inc_end)
 
     def type_and_value(self, new_type, value_generator):
@@ -642,6 +671,14 @@ class CddlParser:
         self.type = new_type
         self.set_value(value_generator)
 
+    def type_and_reference(self, reference):
+        self.type_and_value("OTHER", lambda: None)
+        self.reference = reference
+
+        if self.reference.startswith("$"):
+            self.reference = self.reference.lstrip("$")
+            self.is_socket = True
+
     def set_value(self, value_generator):
         """Set the value of this element.
 
@@ -652,10 +689,6 @@ class CddlParser:
                 f"Attempting to set value ({value}) when a value ({self.value}) already exists"
             )
         self.value = value
-
-        if self.type == "OTHER" and self.value.startswith("$"):
-            self.value = self.value.lstrip("$")
-            self.is_socket = True
 
         if self.type in ["BSTR", "TSTR"]:
             if value is not None:
@@ -677,13 +710,13 @@ class CddlParser:
         while value.type == "GROUP" and len(value.value) == 1:
             value.enforce_no_modifier()
             value = value.value[0]
-        if not self.type in ["INT", "UINT", "NINT", "BSTR", "TSTR", "FLOAT", "BOOL"]:
-            raise CddlParsingError(f"zcbor does not support .eq values for the {self.type} type")
+        # if not self.type in ["INT", "UINT", "NINT", "BSTR", "TSTR", "FLOAT", "BOOL"]:
+        #     raise CddlParsingError(f"zcbor does not support .eq values for the {self.type} type")
         if value.value is None:
             raise CddlParsingError(".eq value must be unambiguous.")
         value.enforce_no_modifier()
 
-        if not self.type == value.type:
+        if not self.type == value.type and "OTHER" not in (self.type, value.type):
             if not (self.type == "INT" and value.type in ["UINT", "NINT"]):
                 raise CddlParsingError(
                     f"Type of .eq value does not match type of element. "
@@ -718,6 +751,17 @@ class CddlParser:
         self.modifiers.add(".default")
         self.default = value.value
 
+    def set_value_range(self, min_val, max_val):
+        self.set_min_value(min_val)
+        self.set_max_value(max_val)
+        if self.type in "UINT":
+            self.set_size_range(sizeof(min_val), sizeof(max_val))
+        if self.type == "NINT":
+            self.set_size_range(sizeof(abs(max_val)), sizeof(abs(min_val)))
+        if self.type == "INT":
+            self.set_size_range(None, max(sizeof(abs(max_val)), sizeof(abs(min_val))))
+        self.modifiers.add("..")
+
     def type_and_range(self, new_type, min_val, max_val, inc_end=True):
         """Set the self.type and self.minValue and self.max_value (or self.min_size and
         self.max_size depending on the type) of this element. For use during CDDL parsing.
@@ -733,15 +777,7 @@ class CddlParser:
         if min_val == max_val:
             return self.type_and_value(new_type, min_val)
         self.type = new_type
-        self.set_min_value(min_val)
-        self.set_max_value(max_val)
-        if new_type in "UINT":
-            self.set_size_range(sizeof(min_val), sizeof(max_val))
-        if new_type == "NINT":
-            self.set_size_range(sizeof(abs(max_val)), sizeof(abs(min_val)))
-        if new_type == "INT":
-            self.set_size_range(None, max(sizeof(abs(max_val)), sizeof(abs(min_val))))
-        self.modifiers.add("..")
+        self.set_value_range(min_val, max_val)
 
     def type_value_size(self, new_type, value, size):
         """Set the self.value and self.size of this element."""
@@ -753,7 +789,7 @@ class CddlParser:
         """Set the self.value and self.min_size and self.max_size of this element."""
         self.type_and_value(new_type, value)
         self.set_size_range(min_size, max_size)
-        self.modifiers.add("size")
+        self.modifiers.add("sizerange")
 
     def set_label(self, label):
         """Set the self.label of this element. For use during CDDL parsing."""
@@ -761,10 +797,12 @@ class CddlParser:
             raise CddlParsingError("Cannot have label after value: " + label)
         self.label = label
 
-    def set_quantifier(self, quantifier):
+    def set_quantifier(self, quantifier, check_order=True):
         """Set the self.quantifier, self.min_qty, and self.max_qty of this element"""
-        if self.type is not None:
-            raise CddlParsingError("Cannot have quantifier after value: " + quantifier)
+        if check_order and self.type is not None:
+            raise CddlParsingError("Cannot have quantifier after type: " + quantifier)
+        if self.quantifier is not None:
+            raise CddlParsingError(f"Cannot add a second quantifier: {quantifier}")
 
         quantifier_mapping = [
             (r"\?", lambda mo: (0, 1)),
@@ -794,7 +832,12 @@ class CddlParser:
         """
         if self.type is None:
             raise CddlParsingError("Cannot have size before value: " + str(size))
+        elif self.size is not None and self.size != size:
+            raise CddlParsingError(
+                f"Attempting to set size to {size}, but size is already {self.size}"
+            )
         elif self.type in ["INT", "UINT", "NINT"]:
+            self.size = size
             value = 256**size
             if self.type == "INT":
                 self.max_value = int((value >> 1) - 1)
@@ -803,6 +846,7 @@ class CddlParser:
             if self.type in ["INT", "NINT"]:
                 self.min_value = int(-1 * (value >> 1))
         elif self.type in ["BSTR", "TSTR", "FLOAT"]:
+            self.size = size
             self.set_size_range(size, size)
         else:
             raise CddlParsingError(".size cannot be applied to %s" % self.type)
@@ -844,7 +888,7 @@ class CddlParser:
         self.cbor = cbor
         if cborseq:
             self.cbor.max_qty = self.default_max_qty
-        self.modifiers.add(".cbor")
+        self.modifiers.add(".cbor" if not cborseq else ".cborseq")
 
     def set_bits(self, bits):
         """Set the self.bits of this element. For use during CDDL parsing."""
@@ -1067,10 +1111,7 @@ class CddlParser:
             (r"true(?!\w)", lambda m_self, _: m_self.type_and_value("BOOL", lambda: True)),
             (r"false(?!\w)", lambda m_self, _: m_self.type_and_value("BOOL", lambda: False)),
             (r"#6\.(?P<item>\d+)", self_type.add_tag),
-            (
-                r"(\$?\$?[\w-]+)",
-                lambda m_self, other_str: m_self.type_and_value("OTHER", lambda: other_str),
-            ),
+            (r"(\$?\$?[\w-]+)", lambda m_self, other_str: m_self.type_and_reference(other_str)),
             (
                 r"\.size \(?(?P<item>" + match_int + r"\.\." + match_int + r")\)?",
                 lambda m_self, _range: m_self.set_size_values(*_range.split("..")),
@@ -1129,7 +1170,7 @@ class CddlParser:
                         match_str = match_obj.group(0)
                     try:
                         handler(self, match_str)
-                    except CddlParsingError as e:
+                    except Exception as e:
                         e.zcbor_add_note(f"  while parsing CDDL: '{match_str}'")
                         raise
                     self.match_str += match_str
@@ -1149,6 +1190,57 @@ class CddlParser:
         # Return the unparsed part of the string.
         return instr.strip()
 
+    def _create_composite(self, other):
+        retval = copy(other)
+        for modifier in self.modifiers:
+            if modifier == "quantifier":
+                retval.set_quantifier(self.quantifier, check_order=False)
+            elif modifier == "size":
+                retval.set_size(self.size)
+                retval.modifiers.add("size")
+            elif modifier == "sizerange":
+                retval.set_size_range(self.min_size, self.max_size)
+                retval.modifiers.add("sizerange")
+            elif modifier == ".size":
+                retval.set_size_value(self.size)
+            elif modifier == ".sizerange":
+                retval.set_size_values(self.min_size, self.max_size)
+            elif modifier == ".eq":
+                retval.set_eq_value(self.value)
+            elif modifier == ".default":
+                retval.set_default_value(self.default)
+            elif modifier in (".lt", ".le"):
+                retval.set_max_comp_modifier(modifier, self.max_value)
+            elif modifier in (".gt", ".ge"):
+                retval.set_min_comp_modifier(modifier, self.min_value)
+            elif modifier in (".cbor", ".cborseq"):
+                retval.set_cbor(self.cbor, modifier == ".cborseq")
+            elif modifier == ".bits":
+                retval.set_bits(self.bits)
+            elif modifier == "..":
+                retval.set_value_range(self.min_value, self.max_value)
+            elif modifier == "key":
+                retval.set_key(self.key)
+            elif modifier == "tag":
+                for tag in self.tags:
+                    retval.add_tag(tag)
+            else:
+                assert False, f"Unhandled modifier: {modifier}"
+
+        return retval
+
+    def create_composite(self):
+        if self.composite is None:
+            if self.type not in ["GROUP", "UNION", "OTHER"]:
+                self.composite = self
+            elif self.type in ["GROUP", "UNION"]:
+                if len(self.value) != 1:
+                    self.composite = self
+                self.composite = self._composite(self.value[0]).create_composite()
+            else:
+                self.composite = self._composite(self.my_types[self.reference]).create_composite()
+        return self.composite
+
     def has_key(self):
         """For checking whether this element has a key (i.e. that it is a valid "MAP" child)
 
@@ -1157,7 +1249,7 @@ class CddlParser:
         """
         ret = (
             self.key is not None
-            or (self.type == "OTHER" and self.my_types[self.value].has_key())
+            or (self.type == "OTHER" and self.my_types[self.reference].has_key())
             or (
                 self.type in ["GROUP", "UNION"]
                 and (self.value and all(child.has_key() for child in self.value))
@@ -1176,10 +1268,7 @@ class CddlParser:
         return True, ""
 
     def post_validate(self):
-        """Function for performing validations that must be done after all parsing is complete.
-
-        This is recursive, so it will post_validate all its children + key + cbor.
-        """
+        """Function for performing validations that must be done after all parsing is complete."""
         # Validation of this element.
         if self.type in ["LIST", "MAP"]:
             invalid_elems = [child for child in self.value if not child.is_valid_map_elem()[0]]
@@ -1197,12 +1286,16 @@ class CddlParser:
                     + str(child_keys)
                     + " pointing to "
                     + str(
-                        [self.my_types[elem.value] for elem in child_keys if elem.type == "OTHER"]
+                        [
+                            self.my_types[elem.reference]
+                            for elem in child_keys
+                            if elem.type == "OTHER"
+                        ]
                     )
                 )
         if self.type == "OTHER":
-            if self.value not in self.my_types.keys() or not isinstance(
-                self.my_types[self.value], type(self)
+            if self.reference not in self.my_types.keys() or not isinstance(
+                self.my_types[self.reference], type(self)
             ):
                 raise CddlParsingError("%s has not been parsed." % self.value)
         if self.type == "LIST":
@@ -1221,15 +1314,6 @@ class CddlParser:
                 raise CddlParsingError(
                     "'any' inside union is not supported since it would always be triggered."
                 )
-
-        # Validation of child elements.
-        if self.type in ["MAP", "LIST", "UNION", "GROUP"]:
-            for child in self.value:
-                child.post_validate()
-        if self.key:
-            self.key.post_validate()
-        if self.cbor:
-            self.cbor.post_validate()
 
     def post_validate_control_group(self):
         if self.type != "GROUP":
@@ -1501,7 +1585,7 @@ class CddlXcoder(CddlParser):
     def is_cbor(self):
         """Whether to include a "cbor" variable for this element."""
         return (self.type not in ["NIL", "UNDEF", "ANY"]) and (
-            (self.type != "OTHER") or (self.my_types[self.value].is_cbor())
+            (self.type != "OTHER") or (self.my_types[self.reference].is_cbor())
         )
 
     def cbor_var_condition(self):
@@ -1522,7 +1606,7 @@ class CddlXcoder(CddlParser):
         """Whether to include a "key" variable for this element."""
         if self.reduced_key_var_condition():
             return True
-        if self.type == "OTHER" and self.my_types[self.value].key_var_condition():
+        if self.type == "OTHER" and self.my_types[self.reference].key_var_condition():
             return True
         if (
             self.type in ["GROUP", "UNION"]
@@ -1561,7 +1645,7 @@ class CddlXcoder(CddlParser):
     def range_check_condition(self):
         """Whether this element needs a check (memcmp) for a string value."""
         if self.type == "OTHER":
-            return self.my_types[self.value].range_check_condition()
+            return self.my_types[self.reference].range_check_condition()
         if self.type not in ["INT", "NINT", "UINT", "BSTR", "TSTR"]:
             return False
         if self.value is not None:
@@ -1627,9 +1711,9 @@ class CddlXcoder(CddlParser):
             self.type == "OTHER"
             and not self.count_var_condition()
             and not self.single_func_impl_condition()
-            and not self.my_types[self.value].single_func_impl_condition()
+            and not self.my_types[self.reference].single_func_impl_condition()
         ):
-            return self.my_types[self.value].int_val()
+            return self.my_types[self.reference].int_val()
         return None
 
     def is_int_disambiguated(self):
@@ -1885,7 +1969,7 @@ class DataTranslator(CddlXcoder):
         Also, process any KeyTuples present.
         """
         if expect_key and self.type == "OTHER" and self.key is None:
-            self.my_types[self.value]._add_if(my_list, obj)
+            self.my_types[self.reference]._add_if(my_list, obj)
             return
         if self.is_unambiguous():
             return
@@ -1959,7 +2043,7 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
         ]:
             return obj
         elif self.type == "OTHER":
-            return self.my_types[self.value]._decode_single_obj(obj)
+            return self.my_types[self.reference]._decode_single_obj(obj)
         elif self.type == "LIST":
             retval = list()
             child_val = iter(obj)
@@ -2018,7 +2102,7 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
                 tag_res = self._decode_single_obj(maybe_tag)
                 return it_copy, tag_res
         if self.type == "OTHER" and self.key is None:
-            return self.my_types[self.value]._decode_full(it)
+            return self.my_types[self.reference]._decode_full(it)
         elif self.type == "GROUP":
             my_list = list()
             child_it = it
@@ -2249,14 +2333,14 @@ class CodeGenerator(CddlXcoder):
 
     def is_entry_type(self):
         """Whether this element (an OTHER) refers to an entry type."""
-        return (self.type == "OTHER") and (self.value in self.entry_type_names)
+        return (self.type == "OTHER") and (self.reference in self.entry_type_names)
 
     def is_cbor(self):
         """Whether to include a "cbor" variable for this element."""
         res = (
             (self.type_name() is not None)
             and not self.is_entry_type()
-            and ((self.type != "OTHER") or self.my_types[self.value].is_cbor())
+            and ((self.type != "OTHER") or self.my_types[self.reference].is_cbor())
         )
         return res
 
@@ -2313,7 +2397,7 @@ class CodeGenerator(CddlXcoder):
             return True
         if self.single_func_impl_condition():
             return True
-        if self.type == "OTHER" and self.my_types[self.value].simple_func_condition():
+        if self.type == "OTHER" and self.my_types[self.reference].simple_func_condition():
             return True
         return False
 
@@ -2382,7 +2466,7 @@ class CodeGenerator(CddlXcoder):
             "MAP": lambda: self.value[0].type_name() if len(self.value) >= 1 else None,
             "GROUP": lambda: self.value[0].type_name() if len(self.value) >= 1 else None,
             "UNION": lambda: self.union_type(),
-            "OTHER": lambda: self.my_types[self.value].type_name(),
+            "OTHER": lambda: self.my_types[self.reference].type_name(),
         }[self.type]()
 
         return name
@@ -2542,7 +2626,7 @@ class CodeGenerator(CddlXcoder):
         if self.reduced_key_var_condition():
             ret_val.extend(self.key.type_def())
         if self.type == "OTHER":
-            ret_val.extend(self.my_types[self.value].type_def())
+            ret_val.extend(self.my_types[self.reference].type_def())
         if self.repeated_type_def_condition():
             type_def_list = self.single_var_type(full=False)
             if type_def_list:
@@ -2574,14 +2658,14 @@ class CodeGenerator(CddlXcoder):
             return "float32_64" if self.mode == "decode" else "float64"
         elif min_size == 8 and max_size == 8:
             return "float64"
-        elif min_size <= 4 and max_size == 8:
+        elif min_size == 2 and max_size == 8:
             return "float" if self.mode == "decode" else "float64"
         else:
             raise CddlParsingError("Floats must have 2, 4 or 8 bytes of precision.")
 
     def single_func_prim_prefix(self):
         if self.type == "OTHER":
-            return self.my_types[self.value].single_func_prim_prefix()
+            return self.my_types[self.reference].single_func_prim_prefix()
         return {
             "INT": f"zcbor_int{self.bit_size()}",
             "UINT": f"zcbor_uint{self.bit_size()}",
@@ -2642,7 +2726,9 @@ class CodeGenerator(CddlXcoder):
             return (None, None)
 
         if self.type == "OTHER":
-            return self.my_types[self.value].single_func(access, union_int, ptr_result=ptr_result)
+            return self.my_types[self.reference].single_func(
+                access, union_int, ptr_result=ptr_result
+            )
 
         func_name = self.single_func_prim_name(union_int, ptr_result=ptr_result)
         if func_name is None:
@@ -2693,7 +2779,7 @@ class CodeGenerator(CddlXcoder):
         if self.type in ["LIST", "MAP", "GROUP", "UNION"]:
             total += max([child.num_backups() for child in self.value] + [0])
         if self.type == "OTHER":
-            total += self.my_types[self.value].num_backups()
+            total += self.my_types[self.reference].num_backups()
         if self.has_backup():
             total += 1
         return total
@@ -2712,7 +2798,7 @@ class CodeGenerator(CddlXcoder):
             if self.key:
                 ret_vals.append(self.key.depends_on())
             if self.type == "OTHER":
-                ret_vals.append(1 + self.my_types[self.value].depends_on())
+                ret_vals.append(1 + self.my_types[self.reference].depends_on())
             if self.type in ["LIST", "MAP", "GROUP", "UNION"]:
                 ret_vals.extend(child.depends_on() for child in self.value)
             self.dependsOnCall = False
@@ -2749,8 +2835,8 @@ class CodeGenerator(CddlXcoder):
                 self.max_qty * max((child.list_counts()[1] for child in self.value)),
             ),
             "OTHER": lambda: (
-                self.min_qty * self.my_types[self.value].list_counts()[0],
-                self.max_qty * self.my_types[self.value].list_counts()[1],
+                self.min_qty * self.my_types[self.reference].list_counts()[0],
+                self.max_qty * self.my_types[self.reference].list_counts()[1],
             ),
         }[self.type]()
         return retval
@@ -2950,8 +3036,8 @@ class CodeGenerator(CddlXcoder):
                 if self.max_size is not None:
                     range_checks.append(f"({access}.len <= {val_to_str(self.max_size)})")
         elif self.type == "OTHER":
-            if not self.my_types[self.value].single_func_impl_condition():
-                range_checks.extend(self.my_types[self.value].range_checks(access))
+            if not self.my_types[self.reference].single_func_impl_condition():
+                range_checks.extend(self.my_types[self.reference].range_checks(access))
 
         if range_checks:
             range_checks[0] = "((" + range_checks[0]
@@ -3087,8 +3173,8 @@ class CodeGenerator(CddlXcoder):
         if self.key:
             for xcoder in self.key.xcoders():
                 yield xcoder
-        if self.type == "OTHER" and self.value not in self.entry_type_names:
-            for xcoder in self.my_types[self.value].xcoders():
+        if self.type == "OTHER" and self.reference not in self.entry_type_names:
+            for xcoder in self.my_types[self.reference].xcoders():
                 yield xcoder
         if self.repeated_single_func_impl_condition():
             yield XcoderTuple(

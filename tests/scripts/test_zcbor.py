@@ -1373,5 +1373,13 @@ class TestParsingErrors(TestCase):
         )
 
 
+class TestComposite(TestCase):
+    def test_composite(self):
+        parsed = cp_from_cddl('foo = 1 => tstr .size 5 bar = ?foo baz = bar .eq "hello"')
+        # print(parsed)
+        print(parsed.my_types["baz"].composite())
+        # self.assertEqual()
+
+
 if __name__ == "__main__":
     main()
