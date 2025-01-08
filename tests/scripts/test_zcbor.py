@@ -1136,12 +1136,7 @@ class TestOptional(TestCase):
 
 class TestUndefined(TestCase):
     def test_undefined_0(self):
-        cddl_res = zcbor.DataTranslator.from_cddl(
-            p_prelude.read_text(encoding="utf-8")
-            + "\n"
-            + p_corner_cases.read_text(encoding="utf-8"),
-            16,
-        )
+        cddl_res = zcbor.DataTranslator.from_cddl(p_corner_cases.read_text(encoding="utf-8"), 16)
         cddl = cddl_res.my_types["Simples"]
         test_yaml = "[true, false, true, null, [zcbor_undefined]]"
 
@@ -1154,12 +1149,7 @@ class TestUndefined(TestCase):
 
 class TestFloat(TestCase):
     def test_float_0(self):
-        cddl_res = zcbor.DataTranslator.from_cddl(
-            p_prelude.read_text(encoding="utf-8")
-            + "\n"
-            + p_corner_cases.read_text(encoding="utf-8"),
-            16,
-        )
+        cddl_res = zcbor.DataTranslator.from_cddl(p_corner_cases.read_text(encoding="utf-8"), 16)
         cddl = cddl_res.my_types["Floats"]
         test_yaml = f"[3.1415, 1234567.89, 0.000123, 3.1415, 2.71828, 5.0, {1 / 3}]"
 
@@ -1243,23 +1233,13 @@ class TestYamlCompatibility(PopenTest):
 
 class TestIntmax(TestCase):
     def test_intmax1(self):
-        cddl_res = zcbor.DataTranslator.from_cddl(
-            p_prelude.read_text(encoding="utf-8")
-            + "\n"
-            + p_corner_cases.read_text(encoding="utf-8"),
-            16,
-        )
+        cddl_res = zcbor.DataTranslator.from_cddl(p_corner_cases.read_text(encoding="utf-8"), 16)
         cddl = cddl_res.my_types["Intmax1"]
         test_yaml = f"[-128, 127, 255, -32768, 32767, 65535, -2147483648, 2147483647, 4294967295, -9223372036854775808, 9223372036854775807, 18446744073709551615]"
         decoded = cddl.decode_str_yaml(test_yaml)
 
     def test_intmax2(self):
-        cddl_res = zcbor.DataTranslator.from_cddl(
-            p_prelude.read_text(encoding="utf-8")
-            + "\n"
-            + p_corner_cases.read_text(encoding="utf-8"),
-            16,
-        )
+        cddl_res = zcbor.DataTranslator.from_cddl(p_corner_cases.read_text(encoding="utf-8"), 16)
         cddl = cddl_res.my_types["Intmax2"]
         test_yaml1 = f"[-128, 0, -32768, 0, -2147483648, 0, -9223372036854775808, 0]"
         decoded = cddl.decode_str_yaml(test_yaml1)
@@ -1286,12 +1266,7 @@ class TestIntmax(TestCase):
 
 class TestInvalidIdentifiers(TestCase):
     def test_invalid_identifiers0(self):
-        cddl_res = zcbor.DataTranslator.from_cddl(
-            p_prelude.read_text(encoding="utf-8")
-            + "\n"
-            + p_corner_cases.read_text(encoding="utf-8"),
-            16,
-        )
+        cddl_res = zcbor.DataTranslator.from_cddl(p_corner_cases.read_text(encoding="utf-8"), 16)
         cddl = cddl_res.my_types["InvalidIdentifiers"]
         test_yaml = "['1one', 2, '{[a-z]}']"
         decoded = cddl.decode_str_yaml(test_yaml)

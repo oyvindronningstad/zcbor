@@ -300,9 +300,12 @@ class CddlParser:
             self.cddl_regexes_init()
 
     @classmethod
-    def from_cddl(cddl_class, cddl_string, default_max_qty, *args, **kwargs):
+    def from_cddl(cddl_class, cddl_string, default_max_qty, *args, no_prelude=False, **kwargs):
         my_types = dict()
 
+        if not no_prelude:
+            with PRELUDE_PATH.open("r") as prelude:
+                cddl_string = prelude.read() + cddl_string
         type_strings = cddl_class.get_types(cddl_string)
         # Separate type_strings as keys in two dicts, one dict for strings that start with &( which
         # are special control operators for .bits, and one dict for all the regular types.
@@ -3721,9 +3724,6 @@ entire declaration is a single line.""",
 
     args = parser.parse_args()
 
-    if not args.no_prelude:
-        args.cddl.append(open(PRELUDE_PATH, "r", encoding="utf-8"))
-
     if hasattr(args, "decode") and not args.decode and not args.encode:
         parser.error("Please specify at least one of --decode or --encode.")
 
@@ -3762,6 +3762,7 @@ def process_code(args):
             args.entry_types,
             args.default_bit_size,
             short_names=args.short_names,
+            no_prelude=args.no_prelude,
         )
 
     # Parsing is done, pretty print the result.
@@ -3865,7 +3866,9 @@ def process_code(args):
 
 def parse_cddl(args):
     cddl_contents = linesep.join((c.read() for c in args.cddl))
-    cddl_res = DataTranslator.from_cddl(cddl_contents, args.default_max_qty)
+    cddl_res = DataTranslator.from_cddl(
+        cddl_contents, args.default_max_qty, no_prelude=args.no_prelude
+    )
     return cddl_res.my_types[args.entry_type]
 
 

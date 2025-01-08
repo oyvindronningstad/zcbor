@@ -1,6 +1,9 @@
 # zcbor v. 0.9.99
 
 
+* The prelude (zcbor/prelude.cddl) is now added by default in all zcbor operations.
+  To remove it from an operation, use the `--no-prelude` flag to the CLI, or the `no_prelude` parameter to `from_cddl`.
+
 # zcbor v. 0.9.0
 
 * `zcbor_simple_*()` functions have been removed to avoid confusion about their use.
