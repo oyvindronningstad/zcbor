@@ -1238,6 +1238,9 @@ class TestIntmax(TestCase):
         test_yaml = f"[-128, 127, 255, -32768, 32767, 65535, -2147483648, 2147483647, 4294967295, -9223372036854775808, 9223372036854775807, 18446744073709551615]"
         decoded = cddl.decode_str_yaml(test_yaml)
 
+    def aValErr(self, cddl, arg):
+        self.assertRaises(zcbor.CddlValidationError, cddl.decode_str_yaml, arg)
+
     def test_intmax2(self):
         cddl_res = zcbor.DataTranslator.from_cddl(p_corner_cases.read_text(encoding="utf-8"), 16)
         cddl = cddl_res.my_types["Intmax2"]
@@ -1262,6 +1265,22 @@ class TestIntmax(TestCase):
         self.assertEqual(decoded.UINT_32, 4294967295)
         self.assertEqual(decoded.INT_64, 9223372036854775807)
         self.assertEqual(decoded.UINT_64, 18446744073709551615)
+
+        self.aValErr(cddl, "[-129, 0, -32768, 0, -2147483648, 0, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[128, 0, -32768, 0, -2147483648, 0, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, -1, -32768, 0, -2147483648, 0, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, 256, -32768, 0, -2147483648, 0, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, 0, -32769, 0, -2147483648, 0, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, 0, 32768, 0, -2147483648, 0, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, 0, -32768, -1, -2147483648, 0, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, 0, -32768, 65536, -2147483648, 0, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, 0, -32768, 0, -2147483649, 0, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, 0, -32768, 0, 2147483648, 0, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, 0, -32768, 0, -2147483648, -1, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, 0, -32768, 0, -2147483648, 4294967296, -9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, 0, -32768, 0, -2147483648, 0, -9223372036854775809, 0]")
+        self.aValErr(cddl, "[-128, 0, -32768, 0, -2147483648, 0, 9223372036854775808, 0]")
+        self.aValErr(cddl, "[-128, 0, -32768, 0, -2147483648, 0, -9223372036854775808, -1]")
 
 
 class TestInvalidIdentifiers(TestCase):
