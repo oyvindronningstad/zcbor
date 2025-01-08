@@ -910,7 +910,10 @@ class CddlParser:
                 r"(uint|nint|int|float|bstr|tstr|bool|nil|any)(?![\w-])",
                 lambda m_self, type_str: m_self.type_and_value(type_str.upper(), lambda: None),
             ),
-            (r"undefined(?!\w)", lambda m_self, _: m_self.type_and_value("UNDEF", lambda: None)),
+            (r"text(?![\w-])", lambda m_self, _: m_self.type_and_value("TSTR", lambda: None)),
+            (r"bytes(?![\w-])", lambda m_self, _: m_self.type_and_value("BSTR", lambda: None)),
+            (r"null(?![\w-])", lambda m_self, _: m_self.type_and_value("NIL", lambda: None)),
+            (r"undefined(?![\w-])", lambda m_self, _: m_self.type_and_value("UNDEF", lambda: None)),
             (
                 r"float16(?![\w-])",
                 lambda m_self, _: m_self.type_value_size("FLOAT", lambda: None, 2),
