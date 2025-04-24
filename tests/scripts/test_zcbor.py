@@ -1280,5 +1280,99 @@ class TestInvalidIdentifiers(CornerCaseTest):
         self.assertTrue(decoded.a_z_tstr)
 
 
+def cp_from_cddl(cls, cddl, kwargs={}):
+    return cls.from_cddl(cddl_string=cddl, default_max_qty=3, **kwargs)
+
+
+class TestParsingErrors(TestCase):
+    def cddl_parsing_error_test_cls(
+        self, invalid_cddl, valid_cddl, message_regex=None, cls=zcbor.CddlParser, kwargs={}
+    ):
+        """Check that invalid CDDL raises an error and check that a valid CDDL variant passes."""
+        self.assertTrue(cp_from_cddl(cls, valid_cddl, kwargs))
+        if message_regex is not None:
+            self.assertRaisesRegex(
+                TypeError, message_regex, cp_from_cddl, cls, invalid_cddl, kwargs
+            )
+        else:
+            self.assertRaises(TypeError, cp_from_cddl, cls, invalid_cddl, kwargs)
+
+    def cddl_parsing_error_test_cp(self, invalid_cddl, valid_cddl, message_regex=None):
+        self.cddl_parsing_error_test_cls(
+            invalid_cddl, valid_cddl, message_regex, cls=zcbor.CddlParser
+        )
+
+    def cddl_parsing_error_test_cg(self, invalid_cddl, valid_cddl, message_regex=None, kwargs={}):
+        kwargs_out = {
+            "mode": "decode",
+            "entry_type_names": ["Foo"],
+            "default_bit_size": 32,
+        }
+        kwargs_out.update(kwargs)
+
+        self.cddl_parsing_error_test_cls(
+            invalid_cddl, valid_cddl, message_regex, cls=zcbor.CodeGenerator, kwargs=kwargs_out
+        )
+
+    def test_multple_elem_group(self):
+        self.cddl_parsing_error_test_cg(
+            """
+                Bar = (int => int, tstr => tstr)
+                Foo = {
+                    +Bar,
+                    -2 => tstr,
+                }
+            """,
+            """
+                Bar = (int => int)
+                Foo = {
+                    Bar,
+                    -2 => tstr,
+                }
+            """,
+            message_regex="Groups with both variable repetitions and multiple elements are not allowed in unordered maps.",
+            kwargs={"unordered_maps": True},
+        )
+        self.cddl_parsing_error_test_cg(
+            """
+                Bar = +(int => int, tstr => tstr)
+                Foo = {
+                    (-1 => bool // Bar),
+                    -2 => tstr,
+                }
+            """,
+            """
+                Bar = (int => int, tstr => tstr)
+                Foo = {
+                    (-1 => bool // Bar),
+                    -2 => tstr,
+                }
+            """,
+            message_regex="Groups with both variable repetitions and multiple elements are not allowed in unordered maps.",
+            kwargs={"unordered_maps": True},
+        )
+        self.cddl_parsing_error_test_cg(
+            """
+                Bar = (3 => int, 4 => tstr)
+                Baz = (5 => int, 6 => tstr)
+                Foo = {
+                    Bar / Baz,
+                    -2 => tstr,
+                }
+            """,
+            """
+                Bar = (3 => int, 4 => tstr)
+                Baz = (5 => int, 6 => tstr)
+                Foo = {
+                    Bar,
+                    Baz,
+                    -2 => tstr,
+                }
+            """,
+            message_regex="Groups with both variable repetitions and multiple elements are not allowed in unordered maps.",
+            kwargs={"unordered_maps": True},
+        )
+
+
 if __name__ == "__main__":
     main()
