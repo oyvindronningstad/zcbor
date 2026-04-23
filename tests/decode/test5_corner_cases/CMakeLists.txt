@@ -88,6 +88,7 @@ set(py_command
     BstrMap
     OptFloatUnion
     OptFloatThenInt
+    CborBstrList
   --decode
   --git-sha-header
   --short-names
