@@ -2540,4 +2540,26 @@ ZTEST(zcbor_unit_tests, test_backup_mismatch)
 }
 
 
+ZTEST(zcbor_unit_tests, test_map_start_fail)
+{
+#if SIZE_MAX == UINT64_MAX
+	uint8_t failing_payload[] = {0xBB, 0x80, 0, 0, 0, 0, 0, 0, 0};
+#elif SIZE_MAX == UINT32_MAX
+	uint8_t failing_payload[] = {0xBA, 0x80, 0, 0, 0};
+#endif
+
+	ZCBOR_STATE_D(state_d1, 0, failing_payload, sizeof(failing_payload), 1, 0);
+	ZCBOR_STATE_D(state_d2, 1, failing_payload, sizeof(failing_payload), 1, 0);
+
+	zassert_false(zcbor_map_start_decode(state_d1), NULL);
+	zassert_equal(ZCBOR_ERR_NO_BACKUP_MEM, zcbor_peek_error(state_d1), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d1)));
+	zassert_equal(state_d1->payload, failing_payload, "payload: %p\n", state_d1->payload);
+
+	bool ret = zcbor_map_start_decode(state_d2);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_INT_SIZE, zcbor_peek_error(state_d2), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d2)));
+	zassert_equal(state_d2->payload, failing_payload, "payload: %p\n", state_d2->payload);
+}
+
+
 ZTEST_SUITE(zcbor_unit_tests, NULL, NULL, NULL, NULL, NULL);

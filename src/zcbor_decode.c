@@ -652,7 +652,11 @@ bool zcbor_bstr_start_decode(zcbor_state_t *state, struct zcbor_string *result)
 	if (!zcbor_new_backup(state, ZCBOR_MAX_ELEM_COUNT)) {
 		FAIL_RESTORE();
 	}
-	ZCBOR_FAIL_IF(!exit_map(state)); // Exit the enclosing map if any
+
+	// Exit the enclosing map if any
+	if (!exit_map(state)) {
+		ZCBOR_FAIL();
+	}
 
 	state->payload_end = result->value + result->len;
 	state->inside_cbor_bstr = true;
@@ -924,7 +928,11 @@ static bool list_map_start_decode(zcbor_state_t *state,
 
 	state->decode_state.indefinite_length_array = indefinite_length_array;
 
-	ZCBOR_FAIL_IF(!exit_map(state)); // Exit the enclosing map if any
+	// Exit the enclosing map if any
+	if(!exit_map(state)) {
+		exit_backup(state);
+		FAIL_RESTORE();
+	}
 
 	return true;
 }
@@ -945,6 +953,7 @@ bool zcbor_map_start_decode(zcbor_state_t *state)
 	if (ret && !state->decode_state.indefinite_length_array) {
 		if (state->elem_count >= (ZCBOR_MAX_ELEM_COUNT / 2)) {
 			/* The new elem_count is too large. */
+			exit_backup(state);
 			ERR_RESTORE(ZCBOR_ERR_INT_SIZE);
 		}
 		state->elem_count *= 2;
