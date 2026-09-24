@@ -1,4 +1,4 @@
-# zcbor v. 0.9.99
+# zcbor v. 1.0.0 (2026-09-24)
 
 Any new bugs, requests, or missing features should be reported as [Github issues](https://github.com/nordicsemi/zcbor/issues).
 
