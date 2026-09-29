@@ -1564,14 +1564,19 @@ class TestIntSize(PopenTest, TempdTest):
         for e in expected_output_types:
             self.assertIn(e, output_h_types, f"Expected '{e}' in output_h_types")
 
+        for n in expected_defines:
+            self.assertNotIn(f"#define {n}", output_h, f"Expected no '{n}' in output_h")
+
         if defines_arg == []:
             for n, v in expected_defines.items():
-                self.assertNotIn(f"#define {n} ({v})", output_h, f"Expected no '{e}' in output_h")
+                self.assertNotIn(
+                    f"#define {n} ({v})", output_h_types, f"Expected no '{n}' in output_h_types"
+                )
             for e in expected_output_code_lit:
                 self.assertIn(e, output_c, f"Expected '{e}' in output_c")
         else:
             for n, v in expected_defines.items():
-                self.assertIn(f"#define {n} ({v})", output_h, f"Expected '{e}' in output_h")
+                self.assertIn(f"#define {n} ({v})", output_h_types, f"Expected '{n}' in output_h_types")
             for e in expected_output_code:
                 self.assertIn(e, output_c, f"Expected '{e}' in output_c")
 

@@ -2822,7 +2822,8 @@ class CodeGenerator(CddlXcoder):
             assert var_type[-1][-1] == "}" or len(var_type) == 1, f"Expected single var: {var_type!r}"
             if not anonymous or var_type[-1][-1] != "}":
                 var_name = self.var_name()
-                max_qty = self.max_qty if self.max_qty is not None else self.default_max_qty_define
+                equal = self.min_qty == self.max_qty and self.min_qty is not None
+                max_qty = self.val_define_name_or_lit("MAX_QTY" if not equal else "QTY")
                 var_type[-1] += f' {var_name}{f"[{max_qty}]" if full and self.max_qty != 1 else ""}'
             var_type = add_semicolon(var_type)
         return var_type
@@ -3290,6 +3291,12 @@ class CodeGenerator(CddlXcoder):
         }[self.type]()
         return retval
 
+    def max_child_list_counts(self):
+        _, max_counts = (
+            zip(*(child.list_counts() for child in self.value)) if self.value else ((0,), (0,))
+        )
+        return sum_or_none(max_counts, default=0)
+
     def is_multiple_elem_group(self):
         """Recursively determine whether the current element is a GROUP with multiple elements."""
         if self.type == "UNION":
@@ -3358,11 +3365,8 @@ class CodeGenerator(CddlXcoder):
             "zcbor_unordered_map_end_decode",
         ]
         assert self.type in ["LIST", "MAP"], "Expected LIST or MAP type, was %s." % self.type
-        _, max_counts = (
-            zip(*(child.list_counts() for child in self.value)) if self.value else ((0,), (0,))
-        )
         force_arg = f", true" if self.mode == "decode" else ""
-        count_arg = f", {sum_or_none(max_counts, default=0)}" if self.mode == "encode" else ""
+        count_arg = f", {self.val_define_name_or_lit('MAX_COUNT')}" if self.mode == "encode" else ""
         with_children = "(%s && ((%s) || (%s, false)) && %s)" % (
             f"{start_func}(state{count_arg})",
             f"{newl_ind}&& ".join(child.full_xcode(res_var=res_var) for child in self.value),
@@ -3529,6 +3533,7 @@ class CodeGenerator(CddlXcoder):
         "QTY": lambda m_self: m_self.min_qty,
         "TAG": lambda m_self, i: m_self.tags[i],
         "NUM_BACKUPS": lambda m_self: m_self.num_backups(),
+        "MAX_COUNT": lambda m_self: m_self.max_child_list_counts(),
     }
 
     def val_define_name(self, val_type, i=None):
@@ -3593,6 +3598,8 @@ class CodeGenerator(CddlXcoder):
                 if self.min_qty is not None:
                     _define("MIN_QTY")
                 _define("MAX_QTY")
+        if self.type in ["MAP", "LIST"]:
+            _define("MAX_COUNT")
         if self.tags:
             for i in range(len(self.tags)):
                 _define(f"TAG", i)
@@ -4207,7 +4214,7 @@ do { \\
 #ifdef __cplusplus
 extern "C" {{
 #endif
-{((linesep * 2) + (linesep).join(self.defines[mode]) + (linesep)) if self.defines[mode] else ""}
+
 {(linesep * 2).join([f"{xcoder.public_xcode_func_sig()};" for xcoder in self.entry_types[mode]])}
 
 
@@ -4231,11 +4238,12 @@ extern "C" {{
 	{body}, \\
 	default: ZCBOR_CAST_FP(func))"""
 
-    def render_type_file(self, header_guard, mode):
+    def render_type_file(self, header_guard, modes):
+        defines = sorted({d for mode in modes for d in self.defines[mode]})
         body = (linesep + linesep).join(
             [
                 f"{typedef[1]} {{{linesep}{linesep.join(typedef[0][1:])};"
-                for typedef in self.type_defs[mode]
+                for typedef in self.type_defs[modes[0]]
             ]
         )
         return f"""/*{self.render_file_header(" *")}
@@ -4260,7 +4268,7 @@ extern "C" {{
  *  See `zcbor --help` for more information about --default-max-qty
  */
 #define {self.default_max_qty_define} {self.default_max_qty}
-
+{((linesep * 2) + (linesep).join(defines) + (linesep)) if defines else ""}
 {body}
 
 #ifdef __cplusplus
@@ -4340,7 +4348,7 @@ target_include_directories({target_name} PUBLIC
             )
 
         print_unless_quiet(quiet, "Writing to " + type_file.name)
-        type_file.write(self.render_type_file(self.header_guard(type_file.name), mode))
+        type_file.write(self.render_type_file(self.header_guard(type_file.name), modes))
 
         if cmake_file:
             print_unless_quiet(quiet, "Writing to " + cmake_file.name)
@@ -4580,8 +4588,8 @@ the file's contents will be used.""",
         action="store_true",
         default=False,
         help="""Make #defines for all magic numbers in generated code, and place them in the
-generated header file. This is off by default because it may create naming conflicts that don't
-show up otherwise.""",
+generated header file with typedefs (--output-h-types). This is off by default because it may
+create naming conflicts that don't show up otherwise.""",
     )
     code_parser.add_argument(
         "--unordered-maps",
