@@ -2606,6 +2606,8 @@ class CodeGenerator(CddlXcoder):
         """If this element is an integer, or starts with an integer, return the integer value."""
         if self.key:
             return self.key.int_val()
+        elif self.tags:
+            return None
         elif self.type in ("UINT", "NINT") and self.is_unambiguous():
             return self.value
         elif self.type == "GROUP" and not self.count_var_condition():
